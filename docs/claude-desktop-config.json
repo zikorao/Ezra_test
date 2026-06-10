@@ -6,7 +6,7 @@
         "/Users/sleekzik/Desktop/AI_ARC/packages/mcp-server/src/index.mjs"
       ],
       "env": {
-        "ARTIFACT_HUB_API_URL": "http://localhost:3000",
+        "ARTIFACT_HUB_API_URL": "https://ezra-test-web.vercel.app",
         "ARTIFACT_HUB_API_KEY": "your-api-key-from-apps-web-env-local"
       }
     }

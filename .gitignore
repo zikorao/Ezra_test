@@ -27,3 +27,4 @@ qdrant_storage/
 
 # Logs
 *.log
+.vercel
