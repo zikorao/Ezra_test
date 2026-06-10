@@ -1,25 +1,45 @@
 import { titleFromFilename } from "../artifacts/text";
-import {
-  generateArtifactMetadata,
-  isOllamaAvailable,
-  parseSearchQuery,
-} from "./ollama";
+import * as groq from "./groq";
+import * as ollama from "./ollama";
 import type { ArtifactMetadata, MetadataInput } from "./types";
 
 export type { ArtifactMetadata, MetadataInput };
-export { isOllamaAvailable, parseSearchQuery };
+
+function useGroq(): boolean {
+  return (
+    process.env.LLM_PROVIDER?.trim().toLowerCase() === "groq" &&
+    Boolean(process.env.GROQ_API_KEY?.trim())
+  );
+}
+
+export async function isLlmAvailable(): Promise<boolean> {
+  return useGroq() ? groq.isGroqAvailable() : ollama.isOllamaAvailable();
+}
+
+export { isOllamaAvailable } from "./ollama";
+
+export async function parseSearchQuery(query: string): Promise<string[]> {
+  return useGroq()
+    ? groq.parseSearchQuery(query)
+    : ollama.parseSearchQuery(query);
+}
 
 export async function suggestMetadata(
   input: MetadataInput,
 ): Promise<ArtifactMetadata> {
   const fallbackTitle = titleFromFilename(input.filename) || "Untitled artifact";
+  const llm = useGroq() ? groq : ollama;
 
   try {
-    if (!(await isOllamaAvailable())) {
+    const available = useGroq()
+      ? await groq.isGroqAvailable()
+      : await ollama.isOllamaAvailable();
+
+    if (!available) {
       return { title: fallbackTitle, description: "", tags: [] };
     }
 
-    const generated = await generateArtifactMetadata(input);
+    const generated = await llm.generateArtifactMetadata(input);
     if (!generated) {
       return { title: fallbackTitle, description: "", tags: [] };
     }

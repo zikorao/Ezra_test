@@ -1,6 +1,13 @@
-import type { Artifact } from "../types";
 import { listArtifacts } from "../artifacts";
-import { parseSearchQuery, isOllamaAvailable } from "../llm";
+import { embedText } from "../embeddings";
+import { parseSearchQuery, isLlmAvailable } from "../llm";
+import type { Artifact } from "../types";
+import { mergeRankedArtifactLists } from "./rrf";
+import {
+  ftsSearchArtifacts,
+  textSearchArtifactsFallback,
+  vectorSearchArtifacts,
+} from "./supabase-search";
 
 function matchesKeyword(artifact: Artifact, keyword: string): boolean {
   const k = keyword.toLowerCase();
@@ -17,14 +24,38 @@ function matchesKeyword(artifact: Artifact, keyword: string): boolean {
   return haystack.includes(k);
 }
 
+function keywordSearch(artifacts: Artifact[], keywords: string[]): Artifact[] {
+  if (keywords.length === 0) return [];
+
+  return artifacts
+    .map((artifact) => ({
+      artifact,
+      score: keywords.filter((kw) => matchesKeyword(artifact, kw)).length,
+    }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(({ artifact }) => artifact);
+}
+
+function buildFtsQuery(original: string, keywords: string[]): string {
+  const parts = new Set<string>();
+  const add = (s: string) => {
+    const t = s.trim();
+    if (t.length > 1) parts.add(t);
+  };
+
+  add(original);
+  for (const kw of keywords) add(kw);
+
+  return [...parts].join(" OR ");
+}
+
 export async function searchArtifacts(query: string): Promise<Artifact[]> {
   const trimmed = query.trim();
   if (!trimmed) return listArtifacts();
 
-  const all = await listArtifacts();
   let keywords: string[];
-
-  if (await isOllamaAvailable()) {
+  if (await isLlmAvailable()) {
     try {
       keywords = await parseSearchQuery(trimmed);
     } catch {
@@ -34,15 +65,30 @@ export async function searchArtifacts(query: string): Promise<Artifact[]> {
     keywords = trimmed.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
   }
 
-  if (keywords.length === 0) return all;
+  const ftsQuery = buildFtsQuery(trimmed, keywords);
+  const lists: Artifact[][] = [];
 
-  const scored = all
-    .map((artifact) => {
-      const score = keywords.filter((kw) => matchesKeyword(artifact, kw)).length;
-      return { artifact, score };
-    })
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score);
+  const ftsResults = await ftsSearchArtifacts(ftsQuery);
+  if (ftsResults.length > 0) {
+    lists.push(ftsResults);
+  } else {
+    const fallback = await textSearchArtifactsFallback(trimmed);
+    if (fallback.length > 0) lists.push(fallback);
+  }
 
-  return scored.map(({ artifact }) => artifact);
+  const queryEmbedding = await embedText(trimmed, "query");
+  if (queryEmbedding) {
+    const vectorResults = await vectorSearchArtifacts(queryEmbedding);
+    if (vectorResults.length > 0) lists.push(vectorResults);
+  }
+
+  const all = await listArtifacts();
+  const keywordResults = keywordSearch(all, keywords.length ? keywords : [trimmed]);
+  if (keywordResults.length > 0) lists.push(keywordResults);
+
+  if (lists.length === 0) return [];
+
+  if (lists.length === 1) return lists[0]!;
+
+  return mergeRankedArtifactLists(lists);
 }
