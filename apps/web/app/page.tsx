@@ -1,6 +1,23 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import { ArtifactCard } from "@/components/artifact-card";
+import { GallerySearch } from "@/components/gallery-search";
+import { searchArtifacts } from "@/lib/search";
 
-export default function Home() {
+type Props = { searchParams: Promise<{ q?: string }> };
+
+export default async function Home({ searchParams }: Props) {
+  const { q } = await searchParams;
+  let artifacts: Awaited<ReturnType<typeof searchArtifacts>> = [];
+  let loadError: string | null = null;
+
+  try {
+    artifacts = q?.trim() ? await searchArtifacts(q) : await searchArtifacts("");
+  } catch (e) {
+    loadError =
+      e instanceof Error ? e.message : "Could not connect to Supabase.";
+  }
+
   return (
     <div className="flex min-h-full flex-col">
       <header className="border-b border-border bg-surface">
@@ -34,48 +51,58 @@ export default function Home() {
           </h1>
           <p className="mt-2 max-w-2xl text-muted">
             Publish mockups, presentations, reports, and docs. Browse the
-            catalog, share time-limited links, and collect structured feedback —
-            no more expiring URLs lost in Slack threads.
+            catalog, share time-limited links, and collect structured feedback.
           </p>
         </section>
 
-        <section className="mb-6 flex items-center gap-3">
-          <input
-            type="search"
-            placeholder="Search artifacts…"
-            disabled
-            className="h-10 flex-1 rounded-lg border border-border bg-surface px-4 text-sm text-foreground placeholder:text-muted/60"
-          />
-          <div className="flex gap-2">
-            {["All", "HTML", "Images", "PDFs"].map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted"
-              >
-                {tag}
-              </span>
+        {loadError && (
+          <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Gallery unavailable: {loadError}. Copy{" "}
+            <code className="font-mono text-xs">.env.example</code> to{" "}
+            <code className="font-mono text-xs">apps/web/.env.local</code> and
+            run Supabase migrations.
+          </div>
+        )}
+
+        <Suspense fallback={<div className="mb-6 h-10 animate-pulse rounded-lg bg-stone-100" />}>
+          <GallerySearch initialQuery={q ?? ""} />
+        </Suspense>
+
+        {q && artifacts.length > 0 && (
+          <p className="mb-4 text-sm text-muted">
+            {artifacts.length} result{artifacts.length === 1 ? "" : "s"} for &ldquo;{q}&rdquo;
+          </p>
+        )}
+
+        {artifacts.length > 0 ? (
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {artifacts.map((artifact) => (
+              <ArtifactCard key={artifact.id} artifact={artifact} />
             ))}
-          </div>
-        </section>
-
-        <section className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface p-12 text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-100 text-2xl">
-            📦
-          </div>
-          <h2 className="text-lg font-medium text-foreground">
-            No artifacts yet
-          </h2>
-          <p className="mt-2 max-w-md text-sm text-muted">
-            The gallery will show published HTML, images, and PDFs with tags
-            and metadata. Publish your first artifact to get started.
-          </p>
-          <Link
-            href="/publish"
-            className="mt-6 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
-          >
-            Publish an artifact
-          </Link>
-        </section>
+          </section>
+        ) : (
+          !loadError && (
+            <section className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface p-12 text-center">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-100 text-2xl">
+                {q ? "🔍" : "📦"}
+              </div>
+              <h2 className="text-lg font-medium text-foreground">
+                {q ? "No matching artifacts" : "No artifacts yet"}
+              </h2>
+              <p className="mt-2 max-w-md text-sm text-muted">
+                {q
+                  ? "Try different keywords or browse the full gallery."
+                  : "Publish HTML, images, or PDFs — they appear here instantly."}
+              </p>
+              <Link
+                href={q ? "/" : "/publish"}
+                className="mt-6 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+              >
+                {q ? "View all artifacts" : "Publish an artifact"}
+              </Link>
+            </section>
+          )
+        )}
       </main>
 
       <footer className="border-t border-border py-6 text-center text-xs text-muted">

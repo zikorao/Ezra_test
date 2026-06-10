@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PublishForm } from "@/components/publish-form";
 
 export default function PublishPage() {
   return (
@@ -22,18 +23,11 @@ export default function PublishPage() {
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-10">
         <h1 className="text-2xl font-semibold tracking-tight">Publish artifact</h1>
         <p className="mt-2 text-sm text-muted">
-          Upload HTML, images, or PDFs. Metadata and tags will be auto-generated
-          in the next step.
+          Upload HTML, images, or PDFs. Ollama auto-fills title, description,
+          and tags from the file content before you publish.
         </p>
 
-        <div className="mt-8 flex min-h-[240px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface p-10 text-center">
-          <p className="text-sm font-medium text-foreground">
-            Upload coming in Step 2
-          </p>
-          <p className="mt-2 text-xs text-muted">
-            Supabase Storage + publish API will be wired here.
-          </p>
-        </div>
+        <PublishForm />
       </main>
     </div>
   );

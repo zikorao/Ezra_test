@@ -42,14 +42,31 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Build progress
 
-| Step | Layer | Status |
-|------|-------|--------|
-| 1 | LLM (Ollama) | ✅ `llama3.2`, `mistral`, `gemma2:2b` |
-| 2 | Scaffold (Next.js + Supabase schema) | ✅ In progress |
-| 3 | Publish + Storage API | Pending |
-| 4 | Share links + Feedback | Pending |
-| 5 | MCP server + LLM features | Pending |
-| 6 | Deploy (Vercel) | Pending |
+| Step | Feature | Status |
+|------|---------|--------|
+| 1 | LLM (Ollama local) | ✅ |
+| 2 | Publish + Storage + Gallery | ✅ |
+| 3 | Share links + Feedback | ✅ |
+| 4 | LLM auto-metadata + search | ✅ |
+| 5 | MCP server (Claude Desktop) | ✅ |
+| 6 | Deploy (Vercel) | ✅ |
+
+### Vercel deployment
+
+Root directory: `apps/web`. Set these environment variables in the Vercel dashboard:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_APP_URL` (your Vercel URL)
+- `ARTIFACT_HUB_API_KEY` (for MCP — `npm run api-key`)
+- `OLLAMA_BASE_URL` / `OLLAMA_MODEL` (optional; omit on Vercel unless using a remote LLM)
+
+```bash
+npx vercel --cwd apps/web
+```
+
+MCP config: see `docs/claude-desktop-config.json`.
 
 ### Ollama (Step 1)
 
