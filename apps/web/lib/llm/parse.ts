@@ -41,3 +41,86 @@ export function parseSearchKeywordsJson(raw: string): string[] {
   }
   return [];
 }
+
+export type ParsedSearchPlan = {
+  keywords: string[];
+  semanticQuery: string;
+  tags: string[];
+};
+
+export function parseSearchPlanJson(raw: string): ParsedSearchPlan | null {
+  try {
+    const parsed = JSON.parse(raw) as {
+      keywords?: string[];
+      semanticQuery?: string;
+      tags?: string[];
+    };
+
+    const keywords = Array.isArray(parsed.keywords)
+      ? parsed.keywords
+          .map((k) => String(k).trim().toLowerCase())
+          .filter(Boolean)
+          .slice(0, 8)
+      : [];
+
+    const semanticQuery = String(parsed.semanticQuery ?? "").trim();
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags
+          .map((t) => String(t).trim().toLowerCase())
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+
+    if (!keywords.length && !semanticQuery && !tags.length) return null;
+    return { keywords, semanticQuery, tags };
+  } catch {
+    return null;
+  }
+}
+
+export type ParsedSuggestResult = {
+  artifactIndexes: number[];
+  keywords: string[];
+  tags: string[];
+};
+
+export function parseSuggestJson(raw: string): ParsedSuggestResult | null {
+  try {
+    const parsed = JSON.parse(raw) as {
+      artifacts?: number[];
+      artifactIndexes?: number[];
+      keywords?: string[];
+      tags?: string[];
+    };
+
+    const indexes = Array.isArray(parsed.artifacts)
+      ? parsed.artifacts
+      : parsed.artifactIndexes;
+
+    const artifactIndexes = Array.isArray(indexes)
+      ? indexes
+          .map((n) => Number(n))
+          .filter((n) => Number.isFinite(n) && n >= 1)
+          .slice(0, 8)
+      : [];
+
+    const keywords = Array.isArray(parsed.keywords)
+      ? parsed.keywords
+          .map((k) => String(k).trim().toLowerCase())
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+
+    const tags = Array.isArray(parsed.tags)
+      ? parsed.tags
+          .map((t) => String(t).trim().toLowerCase())
+          .filter(Boolean)
+          .slice(0, 6)
+      : [];
+
+    if (!artifactIndexes.length && !keywords.length && !tags.length) return null;
+    return { artifactIndexes, keywords, tags };
+  } catch {
+    return null;
+  }
+}

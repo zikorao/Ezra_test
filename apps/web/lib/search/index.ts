@@ -1,17 +1,26 @@
 import { listArtifacts } from "../artifacts";
 import { embedText } from "../embeddings";
-import { parseSearchQuery, isLlmAvailable } from "../llm";
 import type { Artifact } from "../types";
-import { mergeRankedArtifactLists } from "./rrf";
+import {
+  autocompleteSearchBackup,
+  needsSearchBackup,
+} from "./fallback-search";
+import { resolveSearchPlan } from "./llm-search";
+import { mergeRankedArtifactLists, orderArtifactsByIds } from "./rrf";
 import { rerankWithLlm } from "./rerank-llm";
-import { isShortQuery, rankArtifactsByScore, tokenizeQuery } from "./scoring";
+import { rankArtifactsByScore } from "./scoring";
+import { suggestArtifactIds } from "./suggest";
 import {
   ftsSearchArtifacts,
   textSearchArtifactsFallback,
   vectorSearchArtifacts,
 } from "./supabase-search";
 
-function buildFtsQuery(original: string, keywords: string[]): string {
+function buildFtsQuery(
+  original: string,
+  keywords: string[],
+  tags: string[],
+): string {
   const parts = new Set<string>();
   const add = (s: string) => {
     const t = s.trim();
@@ -20,76 +29,87 @@ function buildFtsQuery(original: string, keywords: string[]): string {
 
   add(original);
   for (const kw of keywords) add(kw);
+  for (const tag of tags) add(tag);
 
   return [...parts].join(" OR ");
-}
-
-async function resolveKeywords(query: string): Promise<string[]> {
-  const tokens = tokenizeQuery(query);
-  if (isShortQuery(query)) return tokens;
-
-  if (await isLlmAvailable()) {
-    try {
-      return await parseSearchQuery(query);
-    } catch {
-      return tokens.filter((w) => w.length > 2);
-    }
-  }
-
-  return tokens.filter((w) => w.length > 2);
 }
 
 export async function searchArtifacts(query: string): Promise<Artifact[]> {
   const trimmed = query.trim();
   if (!trimmed) return listArtifacts();
 
-  const short = isShortQuery(trimmed);
-  const keywords = await resolveKeywords(trimmed);
-  const ftsQuery = buildFtsQuery(trimmed, keywords);
+  const { plan, source: planSource } = await resolveSearchPlan(trimmed);
+  const keywords = plan.keywords;
+  const ftsQuery = buildFtsQuery(trimmed, keywords, plan.tags);
   const lists: Artifact[][] = [];
-
-  const all = await listArtifacts();
-  const prefixRanked = rankArtifactsByScore(all, trimmed, keywords);
-  if (prefixRanked.length > 0) {
-    lists.push(prefixRanked);
-    if (short) lists.push(prefixRanked);
-  }
 
   const ftsResults = await ftsSearchArtifacts(ftsQuery);
   if (ftsResults.length > 0) {
     lists.push(ftsResults);
     lists.push(ftsResults);
-  } else if (!short) {
-    const fallback = await textSearchArtifactsFallback(trimmed);
+  } else {
+    const fallback = await textSearchArtifactsFallback(
+      keywords.join(" ") || trimmed,
+    );
     if (fallback.length > 0) lists.push(fallback);
   }
 
-  if (!short) {
-    const queryEmbedding = await embedText(trimmed, "query");
-    if (queryEmbedding) {
-      const threshold = trimmed.length < 12 ? 0.28 : 0.22;
-      const vectorResults = await vectorSearchArtifacts(
-        queryEmbedding,
-        30,
-        threshold,
-      );
-      if (vectorResults.length > 0) lists.push(vectorResults);
-    }
+  const semanticText = plan.semanticQuery || trimmed;
+  const queryEmbedding = await embedText(semanticText, "query");
+  if (queryEmbedding) {
+    const threshold = trimmed.length < 8 ? 0.3 : 0.22;
+    const vectorResults = await vectorSearchArtifacts(
+      queryEmbedding,
+      30,
+      threshold,
+    );
+    if (vectorResults.length > 0) lists.push(vectorResults);
   }
 
-  if (lists.length === 0) return [];
+  const all = await listArtifacts();
+  const tagMatched = plan.tags.length
+    ? all.filter((artifact) =>
+        plan.tags.some((tag) =>
+          artifact.tags.some((t) => t.toLowerCase().includes(tag)),
+        ),
+      )
+    : [];
+  if (tagMatched.length) lists.push(tagMatched);
 
-  let merged =
-    lists.length === 1 ? lists[0]! : mergeRankedArtifactLists(lists);
+  let merged: Artifact[] = [];
+  if (lists.length > 0) {
+    merged =
+      lists.length === 1 ? lists[0]! : mergeRankedArtifactLists(lists);
+    merged = rankArtifactsByScore(merged, trimmed, keywords);
+  }
 
-  merged = rankArtifactsByScore(merged, trimmed, keywords);
-
-  if (!short && merged.length > 1) {
+  if (merged.length > 1) {
     merged = await rerankWithLlm(trimmed, merged);
+  }
+
+  if (needsSearchBackup(trimmed, merged, planSource)) {
+    const backupIds = await suggestArtifactIds(trimmed, keywords);
+    const backup = await autocompleteSearchBackup(
+      trimmed,
+      keywords,
+      backupIds,
+    );
+
+    if (!merged.length) {
+      merged = backup;
+    } else {
+      const seen = new Set(merged.map((a) => a.id));
+      for (const artifact of backup) {
+        if (!seen.has(artifact.id)) merged.push(artifact);
+      }
+      if (backupIds.length) {
+        merged = orderArtifactsByIds(merged, backupIds);
+      }
+    }
   }
 
   return merged;
 }
 
 export { suggestSearch } from "./suggest";
-export type { SearchSuggestion } from "./suggest";
+export type { SearchSuggestion, SuggestResponse } from "./suggest";

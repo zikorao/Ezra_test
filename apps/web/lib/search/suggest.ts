@@ -1,5 +1,6 @@
 import { listArtifacts } from "../artifacts";
-import { scoreForSuggest } from "./scoring";
+import { resolveLlmSuggestions } from "./llm-search";
+import { rankArtifactsByScore, scoreForSuggest } from "./scoring";
 
 export type SearchSuggestion =
   | {
@@ -20,15 +21,18 @@ export type SearchSuggestion =
       href: string;
     };
 
-export async function suggestSearch(
-  prefix: string,
-  limit = 8,
-): Promise<SearchSuggestion[]> {
-  const q = prefix.trim();
-  if (q.length < 2) return [];
+export type SuggestResponse = {
+  suggestions: SearchSuggestion[];
+  source: "llm" | "autocomplete";
+};
 
+function buildPrefixSuggestions(
+  prefix: string,
+  all: Awaited<ReturnType<typeof listArtifacts>>,
+  limit: number,
+): SearchSuggestion[] {
+  const q = prefix.trim();
   const lower = q.toLowerCase();
-  const all = await listArtifacts();
   const suggestions: SearchSuggestion[] = [];
 
   suggestions.push({
@@ -70,10 +74,126 @@ export async function suggestSearch(
       kind: "artifact",
       id: artifact.id,
       title: artifact.title,
-      subtitle: artifact.tags.slice(0, 3).join(" · ") || artifact.description.slice(0, 60),
+      subtitle:
+        artifact.tags.slice(0, 3).join(" · ") ||
+        artifact.description.slice(0, 60),
       href: `/artifacts/${artifact.id}`,
     });
   }
 
-  return suggestions.slice(0, limit + 4);
+  return suggestions;
+}
+
+function buildLlmSuggestions(
+  prefix: string,
+  llm: NonNullable<Awaited<ReturnType<typeof resolveLlmSuggestions>>>,
+  all: Awaited<ReturnType<typeof listArtifacts>>,
+  limit: number,
+): SearchSuggestion[] {
+  const q = prefix.trim();
+  const suggestions: SearchSuggestion[] = [];
+  const byId = new Map(all.map((a) => [a.id, a]));
+
+  const searchTerm = llm.keywords[0] ?? q;
+  suggestions.push({
+    kind: "query",
+    label: `Search “${searchTerm}”`,
+    href: `/?q=${encodeURIComponent(searchTerm)}`,
+  });
+
+  for (const tag of llm.tags.slice(0, 3)) {
+    const match = all.flatMap((a) => a.tags).find((t) => t.toLowerCase() === tag);
+    suggestions.push({
+      kind: "tag",
+      label: match ?? tag,
+      href: `/?q=${encodeURIComponent(match ?? tag)}`,
+    });
+  }
+
+  for (const id of llm.artifactIds.slice(0, limit)) {
+    const artifact = byId.get(id);
+    if (!artifact) continue;
+    suggestions.push({
+      kind: "artifact",
+      id: artifact.id,
+      title: artifact.title,
+      subtitle: artifact.tags.slice(0, 3).join(" · "),
+      href: `/artifacts/${artifact.id}`,
+    });
+  }
+
+  return suggestions;
+}
+
+function mergeSuggestions(
+  primary: SearchSuggestion[],
+  backup: SearchSuggestion[],
+  limit: number,
+): SearchSuggestion[] {
+  const seen = new Set<string>();
+  const merged: SearchSuggestion[] = [];
+
+  for (const item of [...primary, ...backup]) {
+    const key = `${item.kind}:${item.href}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+    if (merged.length >= limit + 4) break;
+  }
+
+  return merged;
+}
+
+export async function suggestSearch(
+  prefix: string,
+  limit = 8,
+): Promise<SuggestResponse> {
+  const q = prefix.trim();
+  if (q.length < 2) return { suggestions: [], source: "autocomplete" };
+
+  const all = await listArtifacts();
+  const backup = buildPrefixSuggestions(q, all, limit);
+
+  const llm = await resolveLlmSuggestions(q);
+  if (llm) {
+    const primary = buildLlmSuggestions(q, llm, all, limit);
+    if (primary.length > 1) {
+      return {
+        suggestions: mergeSuggestions(primary, backup, limit),
+        source: "llm",
+      };
+    }
+  }
+
+  return { suggestions: backup.slice(0, limit + 4), source: "autocomplete" };
+}
+
+/** Resolve artifact hits from autocomplete backup (used by main search). */
+export async function suggestArtifactIds(
+  query: string,
+  extraKeywords: string[] = [],
+): Promise<string[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+
+  const all = await listArtifacts();
+  const llm = await resolveLlmSuggestions(q);
+  const ids: string[] = [];
+
+  if (llm?.artifactIds.length) ids.push(...llm.artifactIds);
+
+  const prefixHits = all
+    .map((artifact) => ({ artifact, score: scoreForSuggest(artifact, q) }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map(({ artifact }) => artifact.id);
+
+  ids.push(...prefixHits);
+
+  const keywordHits = rankArtifactsByScore(all, q, extraKeywords).map(
+    (a) => a.id,
+  );
+  ids.push(...keywordHits);
+
+  return [...new Set(ids)];
 }

@@ -12,8 +12,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const suggestions = await suggestSearch(q);
-    return NextResponse.json({ suggestions });
+    const { suggestions, source } = await suggestSearch(q);
+    return NextResponse.json({ suggestions, source });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Suggest failed";
     return NextResponse.json({ error: message }, { status: 500 });

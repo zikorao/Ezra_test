@@ -32,7 +32,10 @@ export function GallerySearch({ initialQuery = "" }: { initialQuery?: string }) 
       const res = await fetch(
         `/api/search/suggest?q=${encodeURIComponent(trimmed)}`,
       );
-      const data = (await res.json()) as { suggestions?: Suggestion[] };
+      const data = (await res.json()) as {
+        suggestions?: Suggestion[];
+        source?: "llm" | "autocomplete";
+      };
       setSuggestions(data.suggestions ?? []);
       setOpen((data.suggestions?.length ?? 0) > 0);
       setActiveIndex(-1);
@@ -115,7 +118,7 @@ export function GallerySearch({ initialQuery = "" }: { initialQuery?: string }) 
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => query.trim().length >= 2 && setOpen(suggestions.length > 0)}
             onKeyDown={handleKeyDown}
-            placeholder="Search artifacts… type a few letters"
+            placeholder="Search artifacts… AI-powered with smart suggestions"
             autoComplete="off"
             role="combobox"
             aria-expanded={open}
