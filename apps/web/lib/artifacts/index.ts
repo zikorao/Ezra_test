@@ -8,11 +8,11 @@ import {
 } from "../constants";
 import type { Artifact } from "../types";
 import { createAdminClient } from "../supabase/admin";
+import { mergeMetadata, suggestMetadata } from "../llm";
 import {
   extractContentText,
   parseTags,
   sanitizeFilename,
-  titleFromFilename,
 } from "./text";
 
 export type PublishInput = {
@@ -108,8 +108,13 @@ export async function publishArtifact(
   const buffer = Buffer.from(await file.arrayBuffer());
   const contentText = await extractContentText(buffer, mimeType);
   const artifactId = randomUUID();
-  const resolvedTitle =
-    title?.trim() || titleFromFilename(file.name) || "Untitled artifact";
+
+  const aiMeta = await suggestMetadata({
+    filename: file.name,
+    mimeType,
+    contentText,
+  });
+  const merged = mergeMetadata({ title, description, tags }, aiMeta);
 
   const upload = await uploadToStorage(supabase, artifactId, file, buffer);
   if ("error" in upload) {
@@ -120,9 +125,9 @@ export async function publishArtifact(
     .from("artifacts")
     .insert({
       id: artifactId,
-      title: resolvedTitle,
-      description: description?.trim() ?? "",
-      tags: parseTags(tags),
+      title: merged.title,
+      description: merged.description,
+      tags: parseTags(merged.tags),
       mime_type: mimeType,
       storage_path: upload.storagePath,
       content_text: contentText,

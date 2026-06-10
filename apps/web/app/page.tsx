@@ -1,13 +1,18 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ArtifactCard } from "@/components/artifact-card";
-import { listArtifacts } from "@/lib/artifacts";
+import { GallerySearch } from "@/components/gallery-search";
+import { searchArtifacts } from "@/lib/search";
 
-export default async function Home() {
-  let artifacts: Awaited<ReturnType<typeof listArtifacts>> = [];
+type Props = { searchParams: Promise<{ q?: string }> };
+
+export default async function Home({ searchParams }: Props) {
+  const { q } = await searchParams;
+  let artifacts: Awaited<ReturnType<typeof searchArtifacts>> = [];
   let loadError: string | null = null;
 
   try {
-    artifacts = await listArtifacts();
+    artifacts = q?.trim() ? await searchArtifacts(q) : await searchArtifacts("");
   } catch (e) {
     loadError =
       e instanceof Error ? e.message : "Could not connect to Supabase.";
@@ -59,6 +64,16 @@ export default async function Home() {
           </div>
         )}
 
+        <Suspense fallback={<div className="mb-6 h-10 animate-pulse rounded-lg bg-stone-100" />}>
+          <GallerySearch initialQuery={q ?? ""} />
+        </Suspense>
+
+        {q && artifacts.length > 0 && (
+          <p className="mb-4 text-sm text-muted">
+            {artifacts.length} result{artifacts.length === 1 ? "" : "s"} for &ldquo;{q}&rdquo;
+          </p>
+        )}
+
         {artifacts.length > 0 ? (
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {artifacts.map((artifact) => (
@@ -69,19 +84,21 @@ export default async function Home() {
           !loadError && (
             <section className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface p-12 text-center">
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-stone-100 text-2xl">
-                📦
+                {q ? "🔍" : "📦"}
               </div>
               <h2 className="text-lg font-medium text-foreground">
-                No artifacts yet
+                {q ? "No matching artifacts" : "No artifacts yet"}
               </h2>
               <p className="mt-2 max-w-md text-sm text-muted">
-                Publish HTML, images, or PDFs — they appear here instantly.
+                {q
+                  ? "Try different keywords or browse the full gallery."
+                  : "Publish HTML, images, or PDFs — they appear here instantly."}
               </p>
               <Link
-                href="/publish"
+                href={q ? "/" : "/publish"}
                 className="mt-6 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
               >
-                Publish an artifact
+                {q ? "View all artifacts" : "Publish an artifact"}
               </Link>
             </section>
           )
