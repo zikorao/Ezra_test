@@ -43,7 +43,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   [[ -z "$key" || -z "$value" ]] && continue
   # Ollama is local-only; skip for Vercel serverless.
   case "$key" in
-    OLLAMA_BASE_URL|OLLAMA_MODEL|LLM_PROVIDER) continue ;;
+    OLLAMA_BASE_URL|OLLAMA_MODEL|OLLAMA_EMBED_MODEL) continue ;;
   esac
   add_env "$key" "$value" production
 done < "$ENV_FILE"

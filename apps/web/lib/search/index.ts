@@ -3,6 +3,7 @@ import { embedText } from "../embeddings";
 import { parseSearchQuery, isLlmAvailable } from "../llm";
 import type { Artifact } from "../types";
 import { mergeRankedArtifactLists } from "./rrf";
+import { rerankWithLlm } from "./rerank-llm";
 import {
   ftsSearchArtifacts,
   textSearchArtifactsFallback,
@@ -71,6 +72,7 @@ export async function searchArtifacts(query: string): Promise<Artifact[]> {
   const ftsResults = await ftsSearchArtifacts(ftsQuery);
   if (ftsResults.length > 0) {
     lists.push(ftsResults);
+    lists.push(ftsResults);
   } else {
     const fallback = await textSearchArtifactsFallback(trimmed);
     if (fallback.length > 0) lists.push(fallback);
@@ -88,7 +90,9 @@ export async function searchArtifacts(query: string): Promise<Artifact[]> {
 
   if (lists.length === 0) return [];
 
-  if (lists.length === 1) return lists[0]!;
+  let merged =
+    lists.length === 1 ? lists[0]! : mergeRankedArtifactLists(lists);
 
-  return mergeRankedArtifactLists(lists);
+  merged = await rerankWithLlm(trimmed, merged);
+  return merged;
 }
