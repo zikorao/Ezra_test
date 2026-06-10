@@ -1,0 +1,62 @@
+[
+  {
+    "file": "claude-pricing-page.html",
+    "title": "SaaS Pricing Page — Claude",
+    "description": "Three-tier pricing layout with feature comparison table and annual/monthly toggle. Generated for the Artifact Hub marketing refresh.",
+    "tags": ["claude", "pricing", "html", "mockup", "saas"]
+  },
+  {
+    "file": "claude-mobile-nav-redesign.html",
+    "title": "Mobile Navigation Redesign — Claude",
+    "description": "Bottom tab bar and slide-over menu for the consumer app. Includes accessibility notes in HTML comments.",
+    "tags": ["claude", "mobile", "ux", "navigation", "html"]
+  },
+  {
+    "file": "claude-support-chat-widget.html",
+    "title": "Support Chat Widget — Claude",
+    "description": "Embedded help widget mockup with suggested prompts, agent handoff state, and CSAT thumbs-up/down.",
+    "tags": ["claude", "support", "chat", "widget", "html"]
+  },
+  {
+    "file": "gamma-investor-pitch.html",
+    "title": "Series A Pitch Deck — Gamma",
+    "description": "Ten-slide narrative exported from Gamma: problem, traction, GTM, team, and ask.",
+    "tags": ["gamma", "pitch", "deck", "investor", "slides"]
+  },
+  {
+    "file": "gamma-team-offsite.html",
+    "title": "Engineering Offsite Agenda — Gamma",
+    "description": "Two-day offsite schedule with breakout sessions, demos, and retro blocks.",
+    "tags": ["gamma", "offsite", "planning", "engineering", "slides"]
+  },
+  {
+    "file": "gpt-api-documentation.html",
+    "title": "Artifact Hub REST API — GPT",
+    "description": "OpenAPI-style reference for publish, share, and feedback endpoints. Draft for developer portal.",
+    "tags": ["gpt", "api", "documentation", "rest", "developers"]
+  },
+  {
+    "file": "gpt-security-runbook.html",
+    "title": "Incident Response Runbook — GPT",
+    "description": "Security playbooks for credential rotation, share-link abuse, and Supabase RLS misconfiguration.",
+    "tags": ["gpt", "security", "runbook", "ops", "documentation"]
+  },
+  {
+    "file": "gpt-user-research-synthesis.html",
+    "title": "User Research Synthesis — GPT",
+    "description": "Thematic analysis from twelve stakeholder interviews on AI artifact sharing pain points.",
+    "tags": ["gpt", "research", "ux", "synthesis", "report"]
+  },
+  {
+    "file": "midjourney-brand-poster.html",
+    "title": "Brand Campaign Poster — Midjourney",
+    "description": "HTML stand-in for a Midjourney-generated poster: bold typography, teal gradient, product tagline.",
+    "tags": ["midjourney", "brand", "marketing", "visual", "campaign"]
+  },
+  {
+    "file": "midjourney-app-icon-set.html",
+    "title": "App Icon Explorations — Midjourney",
+    "description": "Grid of six icon concepts for Artifact Hub mobile app. Exported as HTML preview board.",
+    "tags": ["midjourney", "icons", "brand", "mobile", "design"]
+  }
+]

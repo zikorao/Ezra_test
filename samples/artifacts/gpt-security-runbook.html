@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><title>Security Runbook</title>
+<style>
+body{font-family:system-ui;max-width:680px;margin:2rem auto;line-height:1.6;padding:0 1rem}
+h1{color:#b91c1c} .sev{padding:0.75rem 1rem;border-radius:0.5rem;margin:1rem 0}
+.p1{background:#fef2f2;border-left:4px solid #b91c1c}
+.p2{background:#fff7ed;border-left:4px solid #ea580c}
+ol{padding-left:1.25rem} li{margin:0.5rem 0}
+</style></head>
+<body>
+<p style="color:#78716c;font-size:0.85rem">GPT-generated ops runbook — review with Security before production use</p>
+<h1>Incident Response Runbook</h1>
+<div class="sev p1"><strong>P1 — Leaked service_role key</strong><ol><li>Rotate key in Supabase dashboard immediately</li><li>Update Vercel env vars and redeploy</li><li>Audit storage bucket access logs</li></ol></div>
+<div class="sev p2"><strong>P2 — Abusive share link traffic</strong><ol><li>Revoke token via delete share_links row</li><li>Rate-limit /api/share/* at edge</li><li>Notify artifact owner</li></ol></div>
+<div class="sev p2"><strong>P2 — RLS policy regression</strong><ol><li>Verify service_role only used server-side</li><li>Re-apply migrations 001–003</li></ol></div>
+</body></html>

@@ -1,5 +1,5 @@
 import type { ArtifactMetadata, MetadataInput } from "./types";
-import { parseMetadataJson, parseSearchKeywordsJson } from "./parse";
+import { parseMetadataJson, parseSearchPlanJson, parseSuggestJson } from "./parse";
 
 const DEFAULT_BASE = "http://localhost:11434";
 const DEFAULT_MODEL = "llama3.2";
@@ -69,16 +69,94 @@ ${excerpt}`;
 }
 
 export async function parseSearchQuery(query: string): Promise<string[]> {
-  const system = `Extract search keywords from natural language queries about a catalog of AI-generated artifacts (HTML mockups, PDFs, images, decks).
-Respond with JSON only: {"keywords":["word1","word2"]}
-Return 1-6 lowercase keywords or short phrases. Include tool names, topics, and file types when implied.`;
+  const plan = await planSearchQuery(query);
+  return plan.keywords;
+}
 
-  const raw = await ollamaChat(system, `Query: ${query}`, true);
-  const keywords = parseSearchKeywordsJson(raw);
-  if (keywords.length > 0) return keywords;
+export type SearchPlan = {
+  keywords: string[];
+  semanticQuery: string;
+  tags: string[];
+};
 
-  return query
+export async function planSearchQuery(query: string): Promise<SearchPlan> {
+  const fallbackTokens = query
     .toLowerCase()
     .split(/\s+/)
-    .filter((w) => w.length > 2);
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+
+  const system = `You improve search for a catalog of AI-generated artifacts.
+Respond with JSON only: {"keywords":["..."],"semanticQuery":"...","tags":["..."]}`;
+
+  try {
+    const raw = await ollamaChat(system, `Query: ${query}`, true);
+    const plan = parseSearchPlanJson(raw);
+    if (plan) {
+      return {
+        keywords: plan.keywords.length
+          ? plan.keywords
+          : fallbackTokens.filter((w) => w.length > 1),
+        semanticQuery: plan.semanticQuery || query.trim(),
+        tags: plan.tags,
+      };
+    }
+  } catch {
+    // fall through
+  }
+
+  return {
+    keywords: fallbackTokens.filter((w) => w.length > 1),
+    semanticQuery: query.trim(),
+    tags: [],
+  };
+}
+
+export type LlmSuggestInput = {
+  index: number;
+  id: string;
+  title: string;
+  tags: string[];
+};
+
+export type LlmSuggestResult = {
+  artifactIds: string[];
+  keywords: string[];
+  tags: string[];
+};
+
+export async function suggestFromPartialQuery(
+  prefix: string,
+  catalog: LlmSuggestInput[],
+): Promise<LlmSuggestResult | null> {
+  if (!catalog.length) return null;
+
+  const lines = catalog.map(
+    (item) =>
+      `${item.index}. ${item.title} | tags: ${item.tags.slice(0, 6).join(", ") || "none"}`,
+  );
+
+  const system = `Autocomplete for artifact catalog. JSON: {"artifacts":[1],"keywords":[],"tags":[]}`;
+
+  try {
+    const raw = await ollamaChat(
+      system,
+      `Partial query: ${prefix}\n\nCatalog:\n${lines.join("\n")}`,
+      true,
+    );
+    const parsed = parseSuggestJson(raw);
+    if (!parsed) return null;
+
+    const artifactIds = parsed.artifactIndexes
+      .map((n) => catalog[n - 1]?.id)
+      .filter((id): id is string => Boolean(id));
+
+    return {
+      artifactIds: [...new Set(artifactIds)],
+      keywords: parsed.keywords,
+      tags: parsed.tags,
+    };
+  } catch {
+    return null;
+  }
 }

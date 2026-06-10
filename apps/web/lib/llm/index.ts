@@ -24,6 +24,26 @@ export async function parseSearchQuery(query: string): Promise<string[]> {
     : ollama.parseSearchQuery(query);
 }
 
+export type SearchPlan = groq.SearchPlan;
+
+export async function planSearchQuery(query: string): Promise<SearchPlan> {
+  return useGroq()
+    ? groq.planSearchQuery(query)
+    : ollama.planSearchQuery(query);
+}
+
+export type LlmSuggestInput = groq.LlmSuggestInput;
+export type LlmSuggestResult = groq.LlmSuggestResult;
+
+export async function suggestFromPartialQuery(
+  prefix: string,
+  catalog: LlmSuggestInput[],
+): Promise<LlmSuggestResult | null> {
+  return useGroq()
+    ? groq.suggestFromPartialQuery(prefix, catalog)
+    : ollama.suggestFromPartialQuery(prefix, catalog);
+}
+
 export async function suggestMetadata(
   input: MetadataInput,
 ): Promise<ArtifactMetadata> {
