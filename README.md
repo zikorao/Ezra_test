@@ -50,6 +50,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | 4 | LLM auto-metadata + search | ✅ |
 | 5 | MCP server (Claude Desktop) | ✅ |
 | 6 | Deploy (Vercel) | ✅ |
+| 7 | Hybrid search (FTS + pgvector) | ✅ |
 
 ### Vercel deployment
 
@@ -62,6 +63,7 @@ Root directory: `apps/web`. Set these environment variables in the Vercel dashbo
 - `ARTIFACT_HUB_API_KEY` (for MCP — `npm run api-key`)
 - `LLM_PROVIDER=groq` + `GROQ_API_KEY` (production LLM — get a free key at [console.groq.com](https://console.groq.com))
 - `GROQ_MODEL` (optional, default `llama-3.1-8b-instant`)
+- `EMBEDDING_PROVIDER` + `JINA_API_KEY` or `OLLAMA_EMBED_MODEL=nomic-embed-text` (semantic search)
 - `OLLAMA_BASE_URL` / `OLLAMA_MODEL` (local dev only)
 
 ```bash
@@ -69,6 +71,25 @@ npx vercel --cwd apps/web
 ```
 
 MCP config: see `docs/claude-desktop-config.json`.
+
+### Hybrid search (FTS + pgvector)
+
+1. Run migration in [Supabase SQL Editor](https://supabase.com/dashboard/project/hseydaybbuhthlxrvvlo/sql/new):
+   ```bash
+   npm run migrate:search   # prints SQL if CLI token not set
+   ```
+   Paste contents of `supabase/migrations/003_hybrid_search.sql`.
+
+2. **Local embeddings:** `ollama pull nomic-embed-text`
+
+3. **Index existing artifacts:**
+   ```bash
+   npm run index
+   ```
+
+Search combines **full-text (tsvector)**, **semantic (pgvector HNSW)**, and **LLM keyword expansion** via reciprocal rank fusion.
+
+**Production (Vercel):** set `EMBEDDING_PROVIDER=jina` and a free [Jina API key](https://jina.ai) for vector search, or rely on FTS + keywords without embeddings.
 
 ### Ollama (Step 1)
 

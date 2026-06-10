@@ -14,6 +14,7 @@ import {
   parseTags,
   sanitizeFilename,
 } from "./text";
+import { indexArtifactEmbedding } from "./indexing";
 
 export type PublishInput = {
   file: File;
@@ -142,7 +143,10 @@ export async function publishArtifact(
     return { ok: false, error: error.message, status: 500 };
   }
 
-  return { ok: true, artifact: data as Artifact };
+  const artifact = data as Artifact;
+  void indexArtifactEmbedding(artifact).catch(() => {});
+
+  return { ok: true, artifact };
 }
 
 export async function listArtifacts(): Promise<Artifact[]> {
