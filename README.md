@@ -60,7 +60,9 @@ Root directory: `apps/web`. Set these environment variables in the Vercel dashbo
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `NEXT_PUBLIC_APP_URL` (your Vercel URL)
 - `ARTIFACT_HUB_API_KEY` (for MCP — `npm run api-key`)
-- `OLLAMA_BASE_URL` / `OLLAMA_MODEL` (optional; omit on Vercel unless using a remote LLM)
+- `LLM_PROVIDER=groq` + `GROQ_API_KEY` (production LLM — get a free key at [console.groq.com](https://console.groq.com))
+- `GROQ_MODEL` (optional, default `llama-3.1-8b-instant`)
+- `OLLAMA_BASE_URL` / `OLLAMA_MODEL` (local dev only)
 
 ```bash
 npx vercel --cwd apps/web

@@ -1,6 +1,6 @@
 import type { Artifact } from "../types";
 import { listArtifacts } from "../artifacts";
-import { parseSearchQuery, isOllamaAvailable } from "../llm";
+import { parseSearchQuery, isLlmAvailable } from "../llm";
 
 function matchesKeyword(artifact: Artifact, keyword: string): boolean {
   const k = keyword.toLowerCase();
@@ -24,7 +24,7 @@ export async function searchArtifacts(query: string): Promise<Artifact[]> {
   const all = await listArtifacts();
   let keywords: string[];
 
-  if (await isOllamaAvailable()) {
+  if (await isLlmAvailable()) {
     try {
       keywords = await parseSearchQuery(trimmed);
     } catch {
