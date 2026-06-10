@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Support Widget — Claude</title>
+  <style>
+    body { font-family: system-ui; background: #e7e5e4; min-height: 100vh; margin: 0; }
+    .page { padding: 2rem; color: #78716c; }
+    .widget { position: fixed; bottom: 1.5rem; right: 1.5rem; width: 340px; background: #fff; border-radius: 1rem; box-shadow: 0 12px 40px rgba(0,0,0,0.15); overflow: hidden; }
+    .head { background: #0d9488; color: #fff; padding: 1rem; font-weight: 600; }
+    .body { padding: 1rem; max-height: 280px; overflow-y: auto; }
+    .msg { background: #f5f5f4; padding: 0.6rem 0.8rem; border-radius: 0.75rem; margin-bottom: 0.5rem; font-size: 0.875rem; }
+    .msg.bot { background: #ccfbf1; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.75rem 0; }
+    .chip { font-size: 0.75rem; border: 1px solid #e7e5e4; padding: 0.35rem 0.6rem; border-radius: 999px; cursor: pointer; }
+    .input { display: flex; border-top: 1px solid #e7e5e4; }
+    .input input { flex: 1; border: none; padding: 0.75rem; }
+    .csat { text-align: center; padding: 0.75rem; font-size: 0.8rem; color: #78716c; }
+  </style>
+</head>
+<body>
+  <div class="page"><p>Background page content — widget floats bottom-right.</p></div>
+  <div class="widget">
+    <div class="head">Artifact Hub Support · Claude mockup</div>
+    <div class="body">
+      <div class="msg bot">Hi! Ask about publishing, share links, or MCP setup.</div>
+      <div class="chips">
+        <span class="chip">How do share links expire?</span>
+        <span class="chip">Connect Claude Desktop</span>
+        <span class="chip">Talk to a human</span>
+      </div>
+      <div class="msg">How do I publish a PDF?</div>
+      <div class="msg bot">Open Publish, drag your PDF, and we'll suggest tags automatically.</div>
+    </div>
+    <div class="csat">Was this helpful? 👍 👎</div>
+    <div class="input"><input placeholder="Type a message…" /></div>
+  </div>
+</body>
+</html>

@@ -34,6 +34,9 @@ export default async function Home({ searchParams }: Props) {
             <Link href="/" className="text-foreground">
               Gallery
             </Link>
+            <Link href="/about" className="hover:text-foreground">
+              About
+            </Link>
             <Link
               href="/publish"
               className="rounded-full bg-accent px-4 py-2 text-white transition-colors hover:bg-accent-hover"

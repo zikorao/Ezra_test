@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><title>Artifact Hub API</title>
+<style>
+body{font-family:ui-monospace,monospace;max-width:760px;margin:2rem auto;padding:0 1rem;background:#fafaf9;color:#1c1917}
+h1{font-family:system-ui;color:#0d9488} .endpoint{border:1px solid #e7e5e4;border-radius:0.5rem;padding:1rem;margin:1rem 0;background:#fff}
+.method{font-weight:700;color:#0d9488} code{background:#f5f5f4;padding:0.15rem 0.35rem;border-radius:4px}
+</style></head>
+<body>
+<p style="font-family:system-ui;font-size:0.85rem;color:#78716c">GPT-generated API reference draft</p>
+<h1>Artifact Hub REST API</h1>
+<div class="endpoint"><span class="method">POST</span> <code>/api/artifacts</code><p>Multipart publish. Fields: file, title, description, tags.</p></div>
+<div class="endpoint"><span class="method">GET</span> <code>/api/artifacts</code><p>List gallery artifacts (newest first).</p></div>
+<div class="endpoint"><span class="method">POST</span> <code>/api/artifacts/{id}/share</code><p>Body: <code>{ "expiry": "1d"|"7d"|"30d"|"never" }</code></p></div>
+<div class="endpoint"><span class="method">POST</span> <code>/api/artifacts/{id}/feedback</code><p>Body: author_name, body, optional parent_id.</p></div>
+<div class="endpoint"><span class="method">GET</span> <code>/api/mcp/artifacts?q=</code><p>MCP search (requires X-API-Key).</p></div>
+</body></html>

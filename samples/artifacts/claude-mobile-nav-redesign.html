@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mobile Nav — Claude mockup</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; font-family: system-ui, sans-serif; }
+    body { background: #292524; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .phone { width: 320px; height: 640px; background: #fafaf9; border-radius: 2rem; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 24px 48px rgba(0,0,0,0.4); }
+    .status { height: 28px; background: #0d9488; }
+    .header { padding: 1rem; font-weight: 600; border-bottom: 1px solid #e7e5e4; }
+    .content { flex: 1; padding: 1rem; color: #78716c; font-size: 0.875rem; }
+    .drawer { background: #fff; border-top: 1px solid #e7e5e4; padding: 1rem; }
+    .drawer a { display: block; padding: 0.75rem 0; color: #1c1917; text-decoration: none; border-bottom: 1px solid #f5f5f4; }
+    .tabs { display: flex; border-top: 1px solid #e7e5e4; background: #fff; }
+    .tab { flex: 1; text-align: center; padding: 0.75rem 0.25rem; font-size: 0.65rem; color: #78716c; }
+    .tab.active { color: #0d9488; font-weight: 600; }
+    .badge { font-size: 0.65rem; color: #0d9488; margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body>
+  <!-- a11y: focus trap and aria-expanded on menu button in production -->
+  <div class="phone">
+    <div class="status"></div>
+    <div class="header">Artifact Hub</div>
+    <div class="content">
+      <p class="badge">Claude · Mobile nav v3</p>
+      <p>Gallery feed with bottom tabs: Home, Search, Publish, Profile. Hamburger opens slide-over for Settings and Help.</p>
+    </div>
+    <div class="drawer">
+      <a href="#">My artifacts</a>
+      <a href="#">Shared with me</a>
+      <a href="#">Settings</a>
+    </div>
+    <nav class="tabs" aria-label="Primary">
+      <div class="tab active">Home</div>
+      <div class="tab">Search</div>
+      <div class="tab">Publish</div>
+      <div class="tab">Profile</div>
+    </nav>
+  </div>
+</body>
+</html>
