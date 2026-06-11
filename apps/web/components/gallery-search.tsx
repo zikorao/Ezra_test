@@ -39,7 +39,13 @@ export function GallerySearch({ initialQuery = "" }: { initialQuery?: string }) 
       const data = (await res.json()) as {
         suggestions?: Suggestion[];
         source?: "llm" | "autocomplete";
+        error?: string;
       };
+      if (res.status === 429) {
+        setSuggestions([]);
+        setOpen(false);
+        return;
+      }
       trackCorrelatedEvent(
         "search.suggest",
         {

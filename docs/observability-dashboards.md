@@ -75,3 +75,7 @@ Client code reads these and passes `trace_id` into Vercel Analytics `track()`.
 - Analytics runs in **development mode** (events logged to browser console)
 - Phoenix export works when `PHOENIX_API_KEY` is set in `apps/web/.env.local`
 - Run `npm run test:observability` to verify Phoenix export
+
+## Related docs
+
+- [rate-limiting.md](./rate-limiting.md) — quotas on search, suggest, and digest (429 responses include the same trace headers when limited)

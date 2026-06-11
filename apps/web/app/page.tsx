@@ -1,7 +1,12 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { Suspense } from "react";
 import { ArtifactCard } from "@/components/artifact-card";
 import { GallerySearch } from "@/components/gallery-search";
+import {
+  enforceRateLimit,
+  RATE_LIMIT_POLICIES,
+} from "@/lib/rate-limit";
 import { searchArtifacts } from "@/lib/search";
 
 type Props = { searchParams: Promise<{ q?: string }> };
@@ -10,9 +15,24 @@ export default async function Home({ searchParams }: Props) {
   const { q } = await searchParams;
   let artifacts: Awaited<ReturnType<typeof searchArtifacts>> = [];
   let loadError: string | null = null;
+  let rateLimitRetryAfter: number | null = null;
 
   try {
-    artifacts = q?.trim() ? await searchArtifacts(q) : await searchArtifacts("");
+    const query = q?.trim();
+    if (query) {
+      const hdrs = await headers();
+      const limit = await enforceRateLimit(
+        RATE_LIMIT_POLICIES.searchQuery,
+        hdrs,
+      );
+      if (!limit.allowed) {
+        rateLimitRetryAfter = limit.retryAfterSeconds;
+      } else {
+        artifacts = await searchArtifacts(query);
+      }
+    } else {
+      artifacts = await searchArtifacts("");
+    }
   } catch (e) {
     loadError =
       e instanceof Error ? e.message : "Could not connect to Supabase.";
@@ -64,6 +84,13 @@ export default async function Home({ searchParams }: Props) {
             <code className="font-mono text-xs">.env.example</code> to{" "}
             <code className="font-mono text-xs">apps/web/.env.local</code> and
             run Supabase migrations.
+          </div>
+        )}
+
+        {rateLimitRetryAfter !== null && (
+          <div className="mb-8 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+            Search rate limit reached. Try again in {rateLimitRetryAfter}{" "}
+            second{rateLimitRetryAfter === 1 ? "" : "s"}.
           </div>
         )}
 

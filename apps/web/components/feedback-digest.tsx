@@ -28,6 +28,7 @@ export function FeedbackDigestPanel({ artifactId, commentCount }: Props) {
       const data = (await res.json()) as {
         digest?: FeedbackDigest;
         error?: string;
+        retry_after_seconds?: number;
       };
 
       if (!res.ok) {
@@ -36,7 +37,13 @@ export function FeedbackDigestPanel({ artifactId, commentCount }: Props) {
           { ok: false, artifact_id: artifactId },
           readTraceIdFromResponse(res),
         );
-        setError(data.error ?? "Could not generate summary");
+        if (res.status === 429 && data.retry_after_seconds) {
+          setError(
+            `Rate limit reached. Try again in ${data.retry_after_seconds}s.`,
+          );
+        } else {
+          setError(data.error ?? "Could not generate summary");
+        }
         return;
       }
 

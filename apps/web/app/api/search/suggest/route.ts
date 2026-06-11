@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { applyTraceHeaders } from "@/lib/observability/correlation";
+import {
+  enforceRateLimit,
+  RATE_LIMIT_POLICIES,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 import { suggestSearch } from "@/lib/search/suggest";
 
 export const runtime = "nodejs";
@@ -10,6 +15,14 @@ export async function GET(request: Request) {
 
   if (q.length < 2) {
     return NextResponse.json({ suggestions: [] });
+  }
+
+  const limit = await enforceRateLimit(
+    RATE_LIMIT_POLICIES.searchSuggest,
+    request.headers,
+  );
+  if (!limit.allowed) {
+    return applyTraceHeaders(rateLimitResponse(limit));
   }
 
   try {

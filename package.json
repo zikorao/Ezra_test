@@ -19,6 +19,7 @@
     "index": "node scripts/index-artifacts.mjs",
     "index:force": "FORCE_REINDEX=1 node scripts/index-artifacts.mjs",
     "migrate:search": "node scripts/apply-search-migration.mjs",
+    "migrate:rate-limit": "node scripts/apply-rate-limit-migration.mjs",
     "mcp": "npm run start --workspace=@artifact-hub/mcp-server",
     "api-key": "node scripts/generate-api-key.mjs",
     "test:observability": "node scripts/test-observability.mjs"

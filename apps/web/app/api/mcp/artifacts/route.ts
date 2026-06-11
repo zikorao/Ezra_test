@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireApiKey } from "@/lib/auth/api-key";
+import { extractApiKey, requireApiKey } from "@/lib/auth/api-key";
 import { listArtifacts } from "@/lib/artifacts";
+import {
+  checkRateLimit,
+  hashIdentifier,
+  RATE_LIMIT_POLICIES,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 import { searchArtifacts } from "@/lib/search";
 
 export const runtime = "nodejs";
@@ -12,6 +18,15 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get("q")?.trim();
+
+    if (q) {
+      const key = extractApiKey(request) ?? "unknown";
+      const limit = await checkRateLimit(
+        RATE_LIMIT_POLICIES.mcpSearch,
+        hashIdentifier(key),
+      );
+      if (!limit.allowed) return rateLimitResponse(limit);
+    }
 
     const artifacts = q ? await searchArtifacts(q) : await listArtifacts();
 

@@ -22,6 +22,7 @@ Artifact Hub is a lightweight platform for the full lifecycle of AI-generated de
 | **Invisible LLM on publish + search** | Auto-metadata and NL search help without making "AI" the headline |
 | **Hybrid search with LLM-first ranking** | Natural queries like *"checkout mockups from Claude"* need semantic + keyword retrieval |
 | **Autocomplete as backup** | Prefix/tag suggestions keep search fast when LLM is slow or unavailable |
+| **Rate limits on LLM routes** | Supabase fixed-window quotas protect suggest, search, and digest from abuse |
 
 ### Core flows shipped
 
@@ -79,6 +80,19 @@ Local: `pip install arize-phoenix && phoenix serve` → `PHOENIX_COLLECTOR_ENDPO
 
 Enable Web Analytics in the Vercel dashboard; see `docs/observability-dashboards.md`.
 
+### Rate limiting (layer 10)
+
+Fixed-window quotas in Supabase (`004_rate_limit.sql`) protect LLM-heavy paths by client IP (or API key for MCP search). Over-limit callers get HTTP **429** with `retry_after_seconds`. If the migration is not applied yet, checks fail open so the app keeps working.
+
+| Route | Limit |
+|-------|-------|
+| `/api/search/suggest` | 60/min/IP |
+| `/?q=` gallery search | 20/min/IP |
+| `/api/artifacts/[id]/feedback/digest` | 5/10min/IP + 2/5min/artifact |
+| `/api/mcp/artifacts?q=` | 60/min/API key |
+
+Apply: `npm run migrate:rate-limit` — see `docs/rate-limiting.md`.
+
 ---
 
 ## Architecture overview
@@ -98,6 +112,7 @@ Enable Web Analytics in the Vercel dashboard; see `docs/observability-dashboards
 │  · embedding vector(768)     │   │            · Jina (prod / Vercel)       │
 │  · HNSW index (pgvector)     │   └───────────────────────────────────────┘
 │  · share_links, feedback     │
+│  · rate_limit_buckets (004)  │
 │  Storage (private bucket)    │
 └──────────────────────────────┘
                ▲
@@ -120,6 +135,9 @@ Enable Web Analytics in the Vercel dashboard; see `docs/observability-dashboards
 
 ```
 User query
+    │
+    ▼
+Rate limit check (gallery / MCP search)
     │
     ▼
 Groq planSearchQuery ──► keywords · semanticQuery · tags
@@ -151,6 +169,7 @@ User clicks "Summarize feedback"
     ▼
 GET /api/artifacts/[id]/feedback/digest
     │
+    ├──► Rate limit check (IP + per-artifact buckets)
     ├──► Load threaded comments from Supabase
     ├──► Format threads for LLM context
     └──► Groq summarizeFeedbackDigest
@@ -167,10 +186,10 @@ On-demand only — no LLM call until the publisher requests a digest.
 |------|---------|
 | `apps/web/` | Next.js app — UI, API routes, Supabase client, search/LLM/feedback modules |
 | `packages/mcp-server/` | Stdio MCP server calling hosted API |
-| `supabase/migrations/` | Schema (001), storage bucket (002), hybrid search (003) |
+| `supabase/migrations/` | Schema (001–002), hybrid search (003), rate limits (004) |
 | `samples/` | Demo artifact library + manifest for seeding |
-| `scripts/` | Seed artifacts/feedback, index backfill, API key, Vercel deploy |
-| `docs/` | Claude Desktop MCP config |
+| `scripts/` | Seed, index, migrations, observability test, Vercel deploy |
+| `docs/` | MCP config, observability dashboards, rate limiting |
 | `WRITEUP.md` | Round 2 submission narrative (this file) |
 
 ### Data model
@@ -178,6 +197,7 @@ On-demand only — no LLM call until the publisher requests a digest.
 - **artifacts** — metadata, tags, mime type, storage path, `content_text`, `search_vector` (tsvector), `embedding` (vector 768)
 - **share_links** — token, expiry, artifact FK
 - **feedback** — body, author, optional `parent_id` for threading
+- **rate_limit_buckets** — fixed-window counters for LLM endpoint quotas (migration 004)
 
 Storage files live in a private Supabase bucket; signed URLs serve previews and downloads.
 
@@ -208,7 +228,7 @@ See `docs/README.md` for full MCP setup.
 
 ### API layer
 
-MCP routes under `/api/mcp/*` authenticate with `X-API-Key` / `Authorization: Bearer`. The stdio server is a thin client — business logic stays in the Next.js app so web and MCP share one codebase.
+MCP routes under `/api/mcp/*` authenticate with `X-API-Key` / `Authorization: Bearer`. Search queries are rate-limited per API key (60/min default). The stdio server is a thin client — business logic stays in the Next.js app so web and MCP share one codebase.
 
 ---
 
@@ -236,12 +256,13 @@ If no LLM is available, publish and keyword/prefix search still work — metadat
 
 ### Indexing embeddings
 
-Run migrations `001`–`003`, then backfill:
+Run migrations `001`–`004`, then backfill:
 
 ```bash
-npm run migrate:search   # prints SQL or applies via Supabase CLI
-npm run index            # embed + FTS index all artifacts
-npm run index:force      # re-embed everything
+npm run migrate:search      # migration 003
+npm run migrate:rate-limit  # migration 004
+npm run index               # embed + FTS index all artifacts
+npm run index:force         # re-embed everything
 ```
 
 Artifacts are re-indexed on publish automatically when embeddings are configured.
@@ -325,12 +346,11 @@ Configure MCP per `docs/claude-desktop-config.json`, then in Claude:
 
 ## What I'd do with another week
 
-1. **OpenTelemetry dashboards** — correlate Phoenix traces with Vercel Analytics
-2. **Search quality regression suite** — scripted queries with expected top hits
+1. **Search quality regression suite** — scripted queries with expected top hits
 2. **GitHub → Vercel CI** — lint + build gate on pull requests
 3. **Light E2E tests** — Playwright for publish → share → feedback → digest happy path
 4. **Digest on share view** — read-only digest for reviewers with artifact access
-5. **Rate limiting** — protect digest and search LLM endpoints from abuse
+5. **Digest caching** — store generated summaries in Supabase to avoid repeat Groq calls
 
 ---
 

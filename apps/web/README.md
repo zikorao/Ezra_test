@@ -29,6 +29,18 @@ For full AI features locally:
 
 For production parity, use Groq + Jina (see root `README.md`).
 
+Optional: Phoenix OTEL (`PHOENIX_API_KEY`), rate-limit tuning (`RATE_LIMIT_*` — see `docs/rate-limiting.md`).
+
+## Migrations
+
+Apply Supabase SQL in order (SQL Editor or npm scripts from repo root):
+
+| Migration | Script |
+|-----------|--------|
+| 001–002 | Manual SQL Editor |
+| 003 hybrid search | `npm run migrate:search` |
+| 004 rate limits | `npm run migrate:rate-limit` |
+
 ## Key pages
 
 | Route | Purpose |
@@ -41,20 +53,33 @@ For production parity, use Groq + Jina (see root `README.md`).
 
 ## Key API routes
 
-| Route | Purpose |
-|-------|---------|
-| `GET /api/artifacts` | List artifacts |
-| `POST /api/artifacts` | Publish (multipart) |
-| `GET/POST /api/artifacts/[id]/feedback` | Threaded feedback |
-| `GET /api/artifacts/[id]/feedback/digest` | Groq feedback summary |
-| `GET /api/search/suggest?q=` | Search autocomplete |
-| `/api/mcp/*` | MCP-authenticated endpoints |
+| Route | Purpose | Rate limited |
+|-------|---------|--------------|
+| `GET /api/artifacts` | List artifacts | — |
+| `POST /api/artifacts` | Publish (multipart) | — |
+| `GET/POST /api/artifacts/[id]/feedback` | Threaded feedback | — |
+| `GET /api/artifacts/[id]/feedback/digest` | Groq feedback summary | ✅ |
+| `GET /api/search/suggest?q=` | Search autocomplete | ✅ |
+| Gallery `/?q=` | Full hybrid search (SSR) | ✅ |
+| `/api/mcp/*` | MCP-authenticated endpoints | search ✅ |
+
+## Observability
+
+- **Phoenix OTEL** — LLM + pipeline spans (`lib/observability/phoenix.ts`)
+- **Vercel OTEL** — platform traces + dual export (`lib/observability/otel.ts`)
+- **Web Analytics** — custom events with `trace_id` (`components/observability.tsx`)
+
+See `docs/observability-dashboards.md`. Smoke test: `npm run test:observability`.
+
+## Rate limiting
+
+Supabase-backed fixed-window limits in `lib/rate-limit/`. Returns HTTP 429 with `retry_after_seconds`. See `docs/rate-limiting.md`.
 
 ## Project structure
 
 ```
 app/              # Next.js App Router pages + API routes
-components/       # UI (gallery-search, feedback-panel, feedback-digest, …)
+components/       # UI (gallery-search, feedback-panel, feedback-digest, observability, …)
 lib/
   artifacts/      # Publish, list, signed URLs, indexing
   feedback/       # Comments, digest generation
@@ -62,8 +87,10 @@ lib/
   embeddings/     # Jina + Ollama + OpenAI
   search/         # Hybrid search, suggest, RRF, rerank
   observability/  # @vercel/otel + Phoenix export, correlation, analytics helpers
+  rate-limit/     # Supabase fixed-window limits for LLM endpoints
   share/          # Share link tokens + expiry
   supabase/       # Admin client
+instrumentation.ts  # registerOTel + Phoenix span processor
 ```
 
 ## Build & deploy

@@ -14,7 +14,8 @@
 6. **Code Agent** — Cursor
 7. **Data Layer** — Supabase Postgres + Storage
 8. **Deployment** — Vercel
-9. **Observability** — Phoenix Cloud (OTEL) + structured logs
+9. **Observability** — Phoenix Cloud (OTEL) + Vercel Analytics correlation
+10. **Rate limiting** — Supabase fixed-window quotas on LLM endpoints
 
 See `AI_Zero_cost_arc.gif` for the full reference architecture diagram.
 
@@ -35,6 +36,7 @@ Open [http://localhost:3000](http://localhost:3000).
    - `supabase/migrations/001_initial_schema.sql`
    - `supabase/migrations/002_storage_bucket.sql`
    - `supabase/migrations/003_hybrid_search.sql` (or `npm run migrate:search`)
+   - `supabase/migrations/004_rate_limit.sql` (or `npm run migrate:rate-limit`)
 3. Add credentials to `apps/web/.env.local`
 
 ### Demo data
@@ -65,6 +67,8 @@ API_URL=https://ezra-test-web.vercel.app npm run seed:feedback
 | 9 | Autocomplete (LLM suggest + prefix fallback) | ✅ |
 | 10 | Feedback digest (Groq summary) | ✅ |
 | 11 | Observability (Phoenix OTEL + structured logs) | ✅ |
+| 12 | OTEL dashboards (Vercel Analytics + trace correlation) | ✅ |
+| 13 | Rate limiting (Supabase quotas on LLM endpoints) | ✅ |
 
 ## npm scripts
 
@@ -80,6 +84,8 @@ API_URL=https://ezra-test-web.vercel.app npm run seed:feedback
 | `npm run index` | Backfill FTS + vector embeddings |
 | `npm run index:force` | Re-embed all artifacts |
 | `npm run migrate:search` | Print/apply migration 003 |
+| `npm run migrate:rate-limit` | Print/apply migration 004 |
+| `npm run test:observability` | Phoenix OTEL smoke test (+ `--live` for production API) |
 | `npm run api-key` | Generate `ARTIFACT_HUB_API_KEY` |
 | `npm run mcp` | Start MCP stdio server |
 | `./scripts/deploy-vercel.sh` | Sync env + deploy to Vercel |
@@ -196,6 +202,23 @@ Artifact Hub registers **`@vercel/otel`** as the primary tracer (`instrumentatio
 2. (Optional) Configure an **OpenTelemetry trace drain** under Observability
 3. See [docs/observability-dashboards.md](docs/observability-dashboards.md) for the full correlation guide
 
+## Rate limiting (Step 13)
+
+LLM-heavy endpoints are protected with **fixed-window limits** stored in Supabase (`rate_limit_buckets`, migration `004`):
+
+| Endpoint | Default limit |
+|----------|----------------|
+| `GET /api/search/suggest` | 60 / minute / IP |
+| Gallery search (`/?q=`) | 20 / minute / IP |
+| `GET /api/artifacts/[id]/feedback/digest` | 5 / 10 min / IP + 2 / 5 min / artifact |
+| `GET /api/mcp/artifacts?q=` | 60 / minute / API key |
+
+Apply the migration: `npm run migrate:rate-limit`
+
+Over-limit responses return **429** with `retry_after_seconds`, `Retry-After`, and `X-RateLimit-Remaining` headers.
+
+See [docs/rate-limiting.md](docs/rate-limiting.md) for tuning env vars and implementation details.
+
 ## Ollama (local dev)
 
 - **Server:** `http://localhost:11434`
@@ -211,5 +234,5 @@ Artifact Hub registers **`@vercel/otel`** as the primary tracer (`instrumentatio
 | `supabase/migrations/` | Database schema |
 | `samples/` | Demo artifact files + manifest |
 | `scripts/` | Seed, index, deploy utilities |
-| `docs/` | MCP configuration, observability dashboards |
+| `docs/` | MCP, observability dashboards, rate limiting |
 | `WRITEUP.md` | Round 2 submission writeup |
