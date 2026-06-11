@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Artifact Hub — Web App
 
-## Getting Started
+Next.js 16 app for the Artifact Hub platform. Deployed to Vercel with root directory `apps/web`.
 
-First, run the development server:
+**Live:** [ezra-test-web.vercel.app](https://ezra-test-web.vercel.app)
+
+## Development
+
+From the **repo root**:
 
 ```bash
+cp .env.example apps/web/.env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Copy `.env.example` from the repo root to `apps/web/.env.local`. Minimum for core features:
 
-## Learn More
+- Supabase URL + anon key + service role key
+- `ARTIFACT_HUB_API_KEY` (generate: `npm run api-key` from repo root)
 
-To learn more about Next.js, take a look at the following resources:
+For full AI features locally:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `LLM_PROVIDER=ollama` + running Ollama (`llama3.2`)
+- `EMBEDDING_PROVIDER=ollama` + `ollama pull nomic-embed-text`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+For production parity, use Groq + Jina (see root `README.md`).
 
-## Deploy on Vercel
+## Key pages
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Route | Purpose |
+|-------|---------|
+| `/` | Gallery + hybrid search + autocomplete |
+| `/publish` | Upload artifacts with LLM metadata suggestions |
+| `/artifacts/[id]` | Preview, share links, feedback, **feedback digest** |
+| `/s/[token]` | Share link view (preview + feedback) |
+| `/about` | Project overview |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Key API routes
+
+| Route | Purpose |
+|-------|---------|
+| `GET /api/artifacts` | List artifacts |
+| `POST /api/artifacts` | Publish (multipart) |
+| `GET/POST /api/artifacts/[id]/feedback` | Threaded feedback |
+| `GET /api/artifacts/[id]/feedback/digest` | Groq feedback summary |
+| `GET /api/search/suggest?q=` | Search autocomplete |
+| `/api/mcp/*` | MCP-authenticated endpoints |
+
+## Project structure
+
+```
+app/              # Next.js App Router pages + API routes
+components/       # UI (gallery-search, feedback-panel, feedback-digest, …)
+lib/
+  artifacts/      # Publish, list, signed URLs, indexing
+  feedback/       # Comments, digest generation
+  llm/            # Groq + Ollama providers
+  embeddings/     # Jina + Ollama + OpenAI
+  search/         # Hybrid search, suggest, RRF, rerank
+  share/          # Share link tokens + expiry
+  supabase/       # Admin client
+```
+
+## Build & deploy
+
+```bash
+npm run build     # from repo root
+npx vercel deploy --prod   # from apps/web
+```
+
+See `vercel.json` for monorepo install command and Tailwind native binary handling.

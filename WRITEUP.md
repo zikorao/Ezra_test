@@ -17,19 +17,21 @@ Artifact Hub is a lightweight platform for the full lifecycle of AI-generated de
 | **Publish form with drag-and-drop** | Matches how people already work — drop a file, add context, ship |
 | **Time-limited share links** (`/s/[token]`) | Solves the expiring-URL problem with explicit expiry (1d / 7d / 30d / never) |
 | **Threaded feedback on artifact + share views** | Feedback stays attached to the artifact, not lost in Slack |
+| **Feedback digest (Groq)** | Publishers catch up on async review threads without reading every comment |
 | **MCP server for Claude Desktop** | Lets power users publish, search, and review conversationally |
 | **Invisible LLM on publish + search** | Auto-metadata and NL search help without making "AI" the headline |
-| **Hybrid search with LLM-first ranking** | Natural queries like *"checkout mockups from Claude"* need semantic + keyword retrieval, not exact string match |
+| **Hybrid search with LLM-first ranking** | Natural queries like *"checkout mockups from Claude"* need semantic + keyword retrieval |
 | **Autocomplete as backup** | Prefix/tag suggestions keep search fast when LLM is slow or unavailable |
 
 ### Core flows shipped
 
-1. **Publish** — Upload HTML, PNG, JPG, WebP, or PDF with title, description, tags; Groq/Ollama suggests metadata on drop
+1. **Publish** — Upload HTML, PNG, JPG, WebP, or PDF; Groq/Ollama suggests title, description, and tags on drop
 2. **Browse** — Gallery with LLM-powered search and live autocomplete dropdown
 3. **Share** — Generate revocable links with configurable expiry
-4. **Feedback** — Structured comments with threaded replies
-5. **MCP** — Six tools for conversational artifact management
-6. **Hybrid search** — FTS + pgvector + Groq query planning, reranking, and prefix fallback
+4. **Feedback** — Structured comments with threaded replies on artifact and share pages
+5. **Feedback digest** — On-demand Groq summary: overview, themes, consensus, action items
+6. **MCP** — Six tools for conversational artifact management
+7. **Hybrid search** — FTS + pgvector + Groq query planning, reranking, and prefix fallback
 
 ---
 
@@ -39,7 +41,6 @@ Artifact Hub is a lightweight platform for the full lifecycle of AI-generated de
 |---------|-----|
 | **Org / RBAC / SSO** | 2-day scope; URL expiry + API key auth covers the challenge minimum |
 | **Version history** | Adds UI and storage complexity; tags + metadata sufficient for MVP |
-| **Feedback summarization** | Valuable but secondary to getting the core loop live |
 | **Real-time collaboration** | Polling/refresh is enough for async review workflows |
 | **Multi-tenant billing** | Out of scope for an internal team tool prototype |
 
@@ -52,15 +53,16 @@ A polished core loop beats a sprawling partial system.
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │  Next.js 16 (apps/web) — Vercel                                         │
-│  Gallery · Publish · Share · About · REST API · /api/search/suggest     │
+│  Gallery · Publish · Share · About · REST API                           │
+│  /api/search/suggest · /api/artifacts/[id]/feedback/digest              │
 └──────────────┬───────────────────────────────┬──────────────────────────┘
                │                               │
                ▼                               ▼
 ┌──────────────────────────────┐   ┌───────────────────────────────────────┐
 │  Supabase                    │   │  AI services (pluggable providers)    │
-│  Postgres                    │   │  LLM: Ollama (dev) · Groq (prod)      │
-│  · artifacts + search_vector │   │  Embeddings: Ollama nomic (dev)       │
-│  · embedding vector(768)     │   │            · Jina (prod / Vercel)     │
+│  Postgres                    │   │  LLM: Ollama (dev) · Groq (prod)        │
+│  · artifacts + search_vector │   │  Embeddings: Ollama nomic (dev)         │
+│  · embedding vector(768)     │   │            · Jina (prod / Vercel)       │
 │  · HNSW index (pgvector)     │   └───────────────────────────────────────┘
 │  · share_links, feedback     │
 │  Storage (private bucket)    │
@@ -96,23 +98,46 @@ Groq rerank (top candidates)
 Autocomplete backup if weak/empty results
 ```
 
-**Autocomplete** (`GET /api/search/suggest`): Groq picks catalog matches from partial input; prefix/tag scoring fills in when LLM times out (~900ms).
+**Autocomplete** (`GET /api/search/suggest`): Groq picks catalog matches from partial input with catalog prefix hints; title/tag prefix scoring fills in when LLM times out (~900ms). Output is sanitized so partial queries like `inv` map to catalog terms (e.g. `investor`), not unrelated English words.
+
+### Feedback digest pipeline
+
+```
+Artifact detail page
+    │
+    ▼
+User clicks "Summarize feedback"
+    │
+    ▼
+GET /api/artifacts/[id]/feedback/digest
+    │
+    ├──► Load threaded comments from Supabase
+    ├──► Format threads for LLM context
+    └──► Groq summarizeFeedbackDigest
+    │
+    ▼
+JSON: summary · themes · consensus · actionItems
+```
+
+On-demand only — no LLM call until the publisher requests a digest.
 
 ### Repo layout
 
 | Path | Purpose |
 |------|---------|
-| `apps/web/` | Next.js app — UI, API routes, Supabase client, search/LLM modules |
+| `apps/web/` | Next.js app — UI, API routes, Supabase client, search/LLM/feedback modules |
 | `packages/mcp-server/` | Stdio MCP server calling hosted API |
-| `supabase/migrations/` | Schema, storage bucket, hybrid search (003) |
+| `supabase/migrations/` | Schema (001), storage bucket (002), hybrid search (003) |
 | `samples/` | Demo artifact library + manifest for seeding |
-| `scripts/` | Seed, index backfill, API key, Vercel deploy |
+| `scripts/` | Seed artifacts/feedback, index backfill, API key, Vercel deploy |
+| `docs/` | Claude Desktop MCP config |
+| `WRITEUP.md` | Round 2 submission narrative (this file) |
 
 ### Data model
 
 - **artifacts** — metadata, tags, mime type, storage path, `content_text`, `search_vector` (tsvector), `embedding` (vector 768)
 - **share_links** — token, expiry, artifact FK
-- **feedback** — body, author, optional parent for threading
+- **feedback** — body, author, optional `parent_id` for threading
 
 Storage files live in a private Supabase bucket; signed URLs serve previews and downloads.
 
@@ -124,9 +149,11 @@ The MCP server runs locally via stdio and talks to the **hosted** Artifact Hub A
 
 ### Setup (reviewer)
 
-1. Copy `docs/claude-desktop-config.json` into Claude Desktop MCP settings
+1. Copy `docs/claude-desktop-config.json` into Claude Desktop MCP settings (update paths and API key)
 2. Set `ARTIFACT_HUB_API_KEY` to the value from Vercel env (or generate locally with `npm run api-key`)
 3. Restart Claude Desktop
+
+See `docs/README.md` for full MCP setup.
 
 ### Tools (6)
 
@@ -149,24 +176,27 @@ MCP routes under `/api/mcp/*` authenticate with `X-API-Key` / `Authorization: Be
 
 LLM features are **assistive**, not decorative:
 
-1. **Auto-metadata on publish** — Groq/Ollama analyzes extracted text and suggests title, description, and tags. Users can edit before submitting; server-side merge fills gaps if fields are empty.
-2. **Search query planning** — Groq expands natural-language queries into keywords, a semantic rewrite (for vector search), and likely catalog tags.
-3. **Search reranking** — Groq re-orders hybrid retrieval candidates so intent wins over raw FTS/vector scores.
-4. **Autocomplete** — Groq suggests artifacts and expanded terms while the user is still typing; prefix matching is the fallback.
+| Feature | When it runs | Provider |
+|---------|--------------|----------|
+| **Auto-metadata** | File dropped on publish form | Groq / Ollama |
+| **Search query planning** | Gallery search submitted | Groq / Ollama |
+| **Search reranking** | After hybrid retrieval | Groq / Ollama |
+| **Autocomplete suggest** | User typing in search bar | Groq / Ollama |
+| **Feedback digest** | Publisher clicks "Summarize feedback" | Groq / Ollama |
 
-Both LLM and embeddings use pluggable providers (`apps/web/lib/llm/`, `apps/web/lib/embeddings/`):
+Pluggable modules: `apps/web/lib/llm/`, `apps/web/lib/embeddings/`.
 
 | Capability | Local dev | Production (Vercel) |
 |------------|-----------|---------------------|
-| Metadata + search LLM | Ollama (`llama3.2`) | Groq (`LLM_PROVIDER=groq`, `GROQ_API_KEY`) |
+| Metadata + search + digest LLM | Ollama (`llama3.2`) | Groq (`LLM_PROVIDER=groq`, `GROQ_API_KEY`) |
 | Vector embeddings | Ollama `nomic-embed-text` | Jina (`EMBEDDING_PROVIDER=jina`, `JINA_API_KEY`) |
 | Full-text search | Supabase `search_vector` | Same |
 
-If no LLM is available, publish and keyword/prefix search still work — metadata falls back to filename heuristics and autocomplete uses title/tag prefix matching.
+If no LLM is available, publish and keyword/prefix search still work — metadata falls back to filename heuristics; digest shows a friendly error.
 
 ### Indexing embeddings
 
-Run migration `003_hybrid_search.sql`, then backfill:
+Run migrations `001`–`003`, then backfill:
 
 ```bash
 npm run migrate:search   # prints SQL or applies via Supabase CLI
@@ -185,10 +215,11 @@ Artifacts are re-indexed on publish automatically when embeddings are configured
 | **Host** | Vercel (free tier) |
 | **URL** | [https://ezra-test-web.vercel.app](https://ezra-test-web.vercel.app) |
 | **Root directory** | `apps/web` |
-| **Build** | Monorepo install from repo root; Tailwind v4 native binaries installed for Linux in `vercel.json` |
+| **Branch** | `main` (auto-deploy on push) |
+| **Build** | Monorepo install from repo root; Tailwind v4 native binaries for Linux in `vercel.json` |
 | **Secrets** | Supabase URL/keys, `ARTIFACT_HUB_API_KEY`, `NEXT_PUBLIC_APP_URL`, `GROQ_API_KEY`, `JINA_API_KEY` |
 
-Production env (minimum for full search):
+Production env (minimum for full search + digest):
 
 ```
 LLM_PROVIDER=groq
@@ -206,24 +237,28 @@ Redeploy: `./scripts/deploy-vercel.sh` or `npx vercel deploy --prod` from `apps/
 
 ### 1. Browse the gallery
 
-Open [https://ezra-test-web.vercel.app](https://ezra-test-web.vercel.app). You should see seeded artifacts (mockups, reports, HTML demos). Type a few letters in search — e.g. `che` — and pick an autocomplete suggestion, or submit queries like *"checkout mockups from Claude"* or *"investor pitch deck"*.
+Open [https://ezra-test-web.vercel.app](https://ezra-test-web.vercel.app). The gallery includes seeded artifacts with realistic review threads. Type a few letters in search — e.g. `che` or `inv` — and pick an autocomplete suggestion, or submit *"checkout mockups from Claude"* or *"investor pitch deck"*.
 
 ### 2. Publish an artifact
 
 1. Click **Publish**
 2. Drop an HTML, PNG, or PDF file
 3. Wait for suggested title/tags (Groq on Vercel; Ollama locally)
-4. Submit — you're redirected to the artifact detail page with preview; embedding is indexed in the background
+4. Submit — preview on the detail page; embedding indexed in the background
 
 ### 3. Share with expiry
 
-On an artifact detail page, create a share link (1d / 7d / 30d / never). Open the `/s/[token]` URL in an incognito window — reviewers see preview + feedback without full gallery access.
+On an artifact detail page, create a share link (1d / 7d / 30d / never). Open `/s/[token]` in incognito — reviewers see preview + feedback without full gallery access.
 
 ### 4. Leave feedback
 
-On artifact or share pages, add a comment. Reply to existing threads to simulate async design review.
+On artifact or share pages, add a comment and reply to threads. Production is pre-seeded with topic-specific threads (checkout, pitch deck, security runbook, etc.) via `npm run seed:feedback`.
 
-### 5. MCP (Claude Desktop)
+### 5. Feedback digest
+
+On any artifact with comments, click **Summarize feedback**. Groq returns an overview, recurring themes, reviewer consensus, and suggested action items. Click **Refresh summary** after new comments arrive.
+
+### 6. MCP (Claude Desktop)
 
 Configure MCP per `docs/claude-desktop-config.json`, then in Claude:
 
@@ -237,9 +272,9 @@ Configure MCP per `docs/claude-desktop-config.json`, then in Claude:
 
 | Tool | Used for |
 |------|----------|
-| **Cursor** | Primary IDE agent — scaffolding, features, Supabase wiring, MCP server, hybrid search, Vercel deploy |
+| **Cursor** | Primary IDE agent — scaffolding, features, Supabase wiring, MCP server, hybrid search, feedback digest, Vercel deploy |
 | **Ollama** | Local LLM + embeddings during development |
-| **Groq** | Production LLM for metadata, search planning, reranking |
+| **Groq** | Production LLM for metadata, search, reranking, autocomplete, feedback digest |
 | **Jina** | Production vector embeddings for pgvector semantic search |
 | **Claude Desktop + MCP** | End-to-end conversational workflow testing |
 
@@ -247,21 +282,43 @@ Configure MCP per `docs/claude-desktop-config.json`, then in Claude:
 
 ## What I'd do with another week
 
-1. **Feedback digest** — LLM summary across reviewers for artifact owners
-2. **Search quality regression suite** — scripted queries with expected top hits
-3. **GitHub → Vercel CI** — Auto-deploy `main` on push
-4. **Light E2E tests** — Playwright for publish → share → feedback happy path
-5. **Tune LLM suggest prompts** — Reduce false expansions on short prefixes (e.g. `inv` → investor, not inventory)
+1. **Search quality regression suite** — scripted queries with expected top hits
+2. **GitHub → Vercel CI** — lint + build gate on pull requests
+3. **Light E2E tests** — Playwright for publish → share → feedback → digest happy path
+4. **Digest on share view** — read-only digest for reviewers with artifact access
+5. **Rate limiting** — protect digest and search LLM endpoints from abuse
 
 ---
 
 ## Seeded demo data
 
+Production is pre-populated. To reproduce locally or refresh:
+
 ```bash
-npm run seed          # 5 simulated AI artifacts
-npm run seed:more     # expanded sample library (19 artifacts)
-npm run seed:all      # seed + feedback threads
+npm run seed          # 5 core AI artifacts (checkout, deck, report, …)
+npm run seed:more     # 10 sample library artifacts from samples/
+npm run seed:all      # both seed scripts
+npm run seed:feedback # threaded comments + replies on all artifacts
+npm run seed:demo     # seed:all + seed:feedback in one command
 npm run index         # backfill embeddings after seeding
 ```
 
-Requires Supabase credentials in `apps/web/.env.local`.
+Seed against production:
+
+```bash
+API_URL=https://ezra-test-web.vercel.app npm run seed:feedback
+```
+
+Requires Supabase credentials in `apps/web/.env.local` for artifact seeding; feedback seeding only needs a running API.
+
+---
+
+## API reference (key routes)
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/artifacts` | GET, POST | List / publish artifacts |
+| `/api/artifacts/[id]/feedback` | GET, POST | List / add threaded feedback |
+| `/api/artifacts/[id]/feedback/digest` | GET | Groq feedback summary |
+| `/api/search/suggest?q=` | GET | Autocomplete suggestions |
+| `/api/mcp/*` | * | MCP-authenticated operations |
