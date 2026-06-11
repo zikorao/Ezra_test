@@ -3,6 +3,7 @@ import { formatFeedbackThreads } from "./format";
 import { getArtifact } from "../artifacts";
 import { summarizeFeedbackDigest, isLlmAvailable } from "../llm";
 import { logEvent } from "../observability/log";
+import { tracePipelineCall } from "../observability/phoenix";
 import type { FeedbackDigest } from "../llm/types";
 
 export async function generateFeedbackDigest(
@@ -30,28 +31,37 @@ export async function generateFeedbackDigest(
   }
 
   const threads = formatFeedbackThreads(feedback);
-  const start = Date.now();
-  const digest = await summarizeFeedbackDigest(artifact.title, threads);
 
-  if (!digest) {
-    logEvent({
-      type: "pipeline",
-      operation: "feedback.digest",
-      ok: false,
-      ms: Date.now() - start,
-      meta: { commentCount: feedback.length },
-      error: "digest parse failed",
-    });
-    return { ok: false, error: "Could not generate summary.", status: 502 };
-  }
+  return tracePipelineCall(
+    { operation: "feedback.digest", meta: { commentCount: feedback.length } },
+    async () => {
+      const start = Date.now();
+      const digest = await summarizeFeedbackDigest(artifact.title, threads);
 
-  logEvent({
-    type: "pipeline",
-    operation: "feedback.digest",
-    ok: true,
-    ms: Date.now() - start,
-    meta: { commentCount: feedback.length, themeCount: digest.themes.length },
-  });
+      if (!digest) {
+        logEvent({
+          type: "pipeline",
+          operation: "feedback.digest",
+          ok: false,
+          ms: Date.now() - start,
+          meta: { commentCount: feedback.length },
+          error: "digest parse failed",
+        });
+        return { ok: false as const, error: "Could not generate summary.", status: 502 };
+      }
 
-  return { ok: true, digest, commentCount: feedback.length };
+      logEvent({
+        type: "pipeline",
+        operation: "feedback.digest",
+        ok: true,
+        ms: Date.now() - start,
+        meta: {
+          commentCount: feedback.length,
+          themeCount: digest.themes.length,
+        },
+      });
+
+      return { ok: true as const, digest, commentCount: feedback.length };
+    },
+  );
 }

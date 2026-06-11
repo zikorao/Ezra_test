@@ -1,5 +1,6 @@
 import { listArtifacts } from "../artifacts";
 import { logEvent } from "../observability/log";
+import { tracePipelineCall } from "../observability/phoenix";
 import { resolveLlmSuggestions } from "./llm-search";
 import { rankArtifactsByScore, scoreForSuggest } from "./scoring";
 
@@ -153,40 +154,54 @@ export async function suggestSearch(
   if (q.length < 2) return { suggestions: [], source: "autocomplete" };
 
   const start = Date.now();
-  const all = await listArtifacts();
-  const backup = buildPrefixSuggestions(q, all, limit);
 
-  const llm = await resolveLlmSuggestions(q);
-  if (llm) {
-    const primary = buildLlmSuggestions(q, llm, all, limit);
-    if (primary.length > 1) {
+  return tracePipelineCall(
+    { operation: "search.suggest", meta: { prefixLen: q.length } },
+    async () => {
+      const all = await listArtifacts();
+      const backup = buildPrefixSuggestions(q, all, limit);
+
+      const llm = await resolveLlmSuggestions(q);
+      if (llm) {
+        const primary = buildLlmSuggestions(q, llm, all, limit);
+        if (primary.length > 1) {
+          const response = {
+            suggestions: mergeSuggestions(primary, backup, limit),
+            source: "llm" as const,
+          };
+          logEvent({
+            type: "pipeline",
+            operation: "search.suggest",
+            ok: true,
+            ms: Date.now() - start,
+            meta: {
+              prefixLen: q.length,
+              source: "llm",
+              count: response.suggestions.length,
+            },
+          });
+          return response;
+        }
+      }
+
       const response = {
-        suggestions: mergeSuggestions(primary, backup, limit),
-        source: "llm" as const,
+        suggestions: backup.slice(0, limit + 4),
+        source: "autocomplete" as const,
       };
       logEvent({
         type: "pipeline",
         operation: "search.suggest",
         ok: true,
         ms: Date.now() - start,
-        meta: { prefixLen: q.length, source: "llm", count: response.suggestions.length },
+        meta: {
+          prefixLen: q.length,
+          source: "autocomplete",
+          count: response.suggestions.length,
+        },
       });
       return response;
-    }
-  }
-
-  const response = {
-    suggestions: backup.slice(0, limit + 4),
-    source: "autocomplete" as const,
-  };
-  logEvent({
-    type: "pipeline",
-    operation: "search.suggest",
-    ok: true,
-    ms: Date.now() - start,
-    meta: { prefixLen: q.length, source: "autocomplete", count: response.suggestions.length },
-  });
-  return response;
+    },
+  );
 }
 
 /** Resolve artifact hits from autocomplete backup (used by main search). */

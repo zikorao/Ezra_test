@@ -43,28 +43,29 @@ Artifact Hub is a lightweight platform for the full lifecycle of AI-generated de
 | **Version history** | Adds UI and storage complexity; tags + metadata sufficient for MVP |
 | **Real-time collaboration** | Polling/refresh is enough for async review workflows |
 | **Multi-tenant billing** | Out of scope for an internal team tool prototype |
-| **Phoenix (full observability stack)** | Deferred for MVP; lightweight structured logging covers LLM ops on Vercel |
 
 A polished core loop beats a sprawling partial system.
 
-### Observability (layer 9 — lite)
+### Observability (layer 9 — Phoenix Cloud)
 
-The reference **$0 AI Architecture Stack** includes Phoenix for LLM tracing. Artifact Hub implements a **pragmatic subset**:
+Artifact Hub exports **OpenTelemetry traces** to [Phoenix Cloud](https://app.phoenix.arize.com) (free tier) using `@arizeai/phoenix-otel`, alongside structured JSON logs on stdout.
 
 | What | How |
 |------|-----|
-| **LLM call tracing** | Structured JSON logs per operation (`metadata.generate`, `search.plan`, `search.rerank`, `search.suggest`, `feedback.digest`) with provider, model, latency, and input size |
-| **Pipeline tracing** | End-to-end logs for `search`, `search.suggest`, and `feedback.digest` with result counts |
-| **Where to view** | Vercel function logs (production) or terminal stdout (local `npm run dev`) |
-| **Not logged** | Full prompts or comment bodies (privacy + log size) |
+| **LLM spans** | `metadata.generate`, `search.plan`, `search.rerank`, `search.suggest`, `feedback.digest` — provider, model, latency, input size |
+| **Pipeline spans** | `search`, `search.suggest`, `feedback.digest` chains with result metadata |
+| **Phoenix UI** | Traces, latency, and span hierarchy in your Phoenix space |
+| **Privacy** | Full prompts and comment bodies are not exported |
+| **Serverless** | Immediate span flush after each operation (Vercel-friendly) |
+| **Fallback** | If `PHOENIX_API_KEY` / endpoint unset, only JSON logs run |
 
-Example log line:
-
-```json
-{"ts":"2026-06-10T12:00:00.000Z","type":"llm","operation":"search.plan","provider":"groq","model":"llama-3.1-8b-instant","ok":true,"ms":312,"inputChars":84}
+```bash
+PHOENIX_API_KEY=phx_...
+PHOENIX_COLLECTOR_ENDPOINT=https://app.phoenix.arize.com/s/your-space-name
+PHOENIX_PROJECT_NAME=artifact-hub
 ```
 
-Full Phoenix / OpenTelemetry integration is listed under “What I'd do with another week.”
+Local: `pip install arize-phoenix && phoenix serve` → `PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006`
 
 ---
 
@@ -97,9 +98,9 @@ Full Phoenix / OpenTelemetry integration is listed under “What I'd do with ano
                │
                ▼
 ┌──────────────────────────────┐
-│  Observability (lite)        │
+│  Observability (Phoenix OTEL) │
 │  Structured JSON → Vercel logs│
-│  LLM ops + pipeline timing   │
+│  LLM + pipeline spans        │
 └──────────────────────────────┘
 ```
 
@@ -244,7 +245,7 @@ Artifacts are re-indexed on publish automatically when embeddings are configured
 | **Root directory** | `apps/web` |
 | **Branch** | `main` (auto-deploy on push) |
 | **Build** | Monorepo install from repo root; Tailwind v4 native binaries for Linux in `vercel.json` |
-| **Secrets** | Supabase URL/keys, `ARTIFACT_HUB_API_KEY`, `NEXT_PUBLIC_APP_URL`, `GROQ_API_KEY`, `JINA_API_KEY` |
+| **Secrets** | Supabase URL/keys, `ARTIFACT_HUB_API_KEY`, `NEXT_PUBLIC_APP_URL`, `GROQ_API_KEY`, `JINA_API_KEY`, `PHOENIX_API_KEY`, `PHOENIX_COLLECTOR_ENDPOINT` |
 
 Production env (minimum for full search + digest):
 
@@ -254,6 +255,9 @@ GROQ_API_KEY=...
 GROQ_MODEL=llama-3.1-8b-instant
 EMBEDDING_PROVIDER=jina
 JINA_API_KEY=...
+PHOENIX_API_KEY=...
+PHOENIX_COLLECTOR_ENDPOINT=https://app.phoenix.arize.com/s/your-space-name
+PHOENIX_PROJECT_NAME=artifact-hub
 ```
 
 Redeploy: `./scripts/deploy-vercel.sh` or `npx vercel deploy --prod` from `apps/web`.
@@ -309,7 +313,7 @@ Configure MCP per `docs/claude-desktop-config.json`, then in Claude:
 
 ## What I'd do with another week
 
-1. **Phoenix / OpenTelemetry** — full LLM trace UI beyond structured logs
+1. **OpenTelemetry dashboards** — correlate Phoenix traces with Vercel Analytics
 2. **Search quality regression suite** — scripted queries with expected top hits
 2. **GitHub → Vercel CI** — lint + build gate on pull requests
 3. **Light E2E tests** — Playwright for publish → share → feedback → digest happy path

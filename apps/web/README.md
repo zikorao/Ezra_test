@@ -61,7 +61,7 @@ lib/
   llm/            # Groq + Ollama providers
   embeddings/     # Jina + Ollama + OpenAI
   search/         # Hybrid search, suggest, RRF, rerank
-  observability/  # Structured JSON logging for LLM ops
+  observability/  # Phoenix OTEL + structured JSON logging
   share/          # Share link tokens + expiry
   supabase/       # Admin client
 ```

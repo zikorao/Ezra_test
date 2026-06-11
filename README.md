@@ -14,7 +14,7 @@
 6. **Code Agent** — Cursor
 7. **Data Layer** — Supabase Postgres + Storage
 8. **Deployment** — Vercel
-9. **Observability** — Structured LLM/pipeline logging (Phoenix deferred)
+9. **Observability** — Phoenix Cloud (OTEL) + structured logs
 
 See `AI_Zero_cost_arc.gif` for the full reference architecture diagram.
 
@@ -64,7 +64,7 @@ API_URL=https://ezra-test-web.vercel.app npm run seed:feedback
 | 8 | LLM-first search (Groq plan + rerank) | ✅ |
 | 9 | Autocomplete (LLM suggest + prefix fallback) | ✅ |
 | 10 | Feedback digest (Groq summary) | ✅ |
-| 11 | Observability lite (structured LLM logs) | ✅ |
+| 11 | Observability (Phoenix OTEL + structured logs) | ✅ |
 
 ## npm scripts
 
@@ -100,6 +100,9 @@ Root directory: `apps/web`. Required environment variables:
 | `GROQ_MODEL` | Optional (default `llama-3.1-8b-instant`) |
 | `EMBEDDING_PROVIDER=jina` | Production embeddings |
 | `JINA_API_KEY` | Jina API key ([jina.ai](https://jina.ai)) |
+| `PHOENIX_API_KEY` | Phoenix Cloud API key ([app.phoenix.arize.com](https://app.phoenix.arize.com)) |
+| `PHOENIX_COLLECTOR_ENDPOINT` | Phoenix OTLP endpoint (from space Settings) |
+| `PHOENIX_PROJECT_NAME` | Project name in Phoenix UI (default `artifact-hub`) |
 
 Local-only (do not set on Vercel): `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_EMBED_MODEL`.
 
@@ -142,18 +145,46 @@ On artifact detail pages with comments, click **Summarize feedback**:
 - Returns overview, themes, consensus, and action items via Groq
 - On-demand only (no LLM cost until clicked)
 
-## Observability (Step 11)
+## Observability (Step 11) — Phoenix Cloud
 
-Structured JSON logs for AI operations — viewable in **Vercel function logs** or local terminal:
+Artifact Hub exports **OpenTelemetry traces** to [Phoenix](https://arize.com/phoenix/) (free tier: 2 cloud instances) via `@arizeai/phoenix-otel`, plus structured JSON logs on stdout.
 
-| Operation | Logged fields |
-|-----------|----------------|
-| `metadata.generate` | provider, model, latency, input size |
-| `search.plan` / `search.rerank` / `search.suggest` | same |
-| `feedback.digest` | latency, comment count |
-| `search` (pipeline) | query length, result count, plan source |
+### Setup (Phoenix Cloud free tier)
 
-Full prompts are **not** logged (privacy). Phoenix/OpenTelemetry is deferred — see `WRITEUP.md`.
+1. Sign up at [app.phoenix.arize.com](https://app.phoenix.arize.com)
+2. Open your space → **Settings** → copy **Collector Endpoint** and **API Key**
+3. Add to `apps/web/.env.local` and Vercel:
+
+```bash
+PHOENIX_API_KEY=phx_...
+PHOENIX_COLLECTOR_ENDPOINT=https://app.phoenix.arize.com/s/your-space-name
+PHOENIX_PROJECT_NAME=artifact-hub
+```
+
+4. Redeploy, then run a search or feedback digest — traces appear in the Phoenix UI.
+
+### Local Phoenix (optional)
+
+```bash
+pip install arize-phoenix
+phoenix serve   # UI at http://localhost:6006
+```
+
+```bash
+PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006
+# PHOENIX_API_KEY not required for local
+```
+
+### What gets traced
+
+| Span | Kind | When |
+|------|------|------|
+| `search.plan`, `search.rerank`, `search.suggest`, `metadata.generate`, `feedback.digest` | LLM | Each Groq/Ollama call |
+| `search`, `search.suggest`, `feedback.digest` | CHAIN | End-to-end pipeline |
+
+Prompts and comment bodies are **not** exported (privacy). Spans include provider, model, latency, and input size.
+
+Structured JSON logs remain in Vercel function logs when Phoenix is disabled.
 
 ## Ollama (local dev)
 
