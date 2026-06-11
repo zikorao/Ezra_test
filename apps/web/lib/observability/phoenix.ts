@@ -26,7 +26,9 @@ export function initPhoenix(): void {
   try {
     provider = register({
       projectName: process.env.PHOENIX_PROJECT_NAME?.trim() || "artifact-hub",
-      url: process.env.PHOENIX_COLLECTOR_ENDPOINT?.trim(),
+      url:
+        process.env.PHOENIX_COLLECTOR_ENDPOINT?.trim() ||
+        "https://app.phoenix.arize.com",
       apiKey: process.env.PHOENIX_API_KEY?.trim(),
       // Immediate export on serverless — avoids lost batches when the function freezes.
       batch: process.env.PHOENIX_BATCH === "true",
