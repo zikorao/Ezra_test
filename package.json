@@ -15,6 +15,7 @@
     "seed:more": "node scripts/seed-more-artifacts.mjs",
     "seed:all": "node scripts/seed-artifacts.mjs && node scripts/seed-more-artifacts.mjs",
     "seed:feedback": "node scripts/seed-feedback.mjs",
+    "seed:demo": "node scripts/seed-artifacts.mjs && node scripts/seed-more-artifacts.mjs && node scripts/seed-feedback.mjs",
     "index": "node scripts/index-artifacts.mjs",
     "index:force": "FORCE_REINDEX=1 node scripts/index-artifacts.mjs",
     "migrate:search": "node scripts/apply-search-migration.mjs",
