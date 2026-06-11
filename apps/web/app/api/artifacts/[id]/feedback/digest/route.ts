@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { applyTraceHeaders } from "@/lib/observability/correlation";
 import { generateFeedbackDigest } from "@/lib/feedback/digest";
 
 export const runtime = "nodejs";
@@ -11,18 +12,21 @@ export async function GET(_request: Request, context: RouteContext) {
   try {
     const result = await generateFeedbackDigest(id);
     if (!result.ok) {
-      return NextResponse.json(
-        { error: result.error },
-        { status: result.status },
+      return applyTraceHeaders(
+        NextResponse.json({ error: result.error }, { status: result.status }),
       );
     }
 
-    return NextResponse.json({
-      digest: result.digest,
-      commentCount: result.commentCount,
-    });
+    return applyTraceHeaders(
+      NextResponse.json({
+        digest: result.digest,
+        commentCount: result.commentCount,
+      }),
+    );
   } catch (e) {
     const message = e instanceof Error ? e.message : "Digest failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return applyTraceHeaders(
+      NextResponse.json({ error: message }, { status: 500 }),
+    );
   }
 }

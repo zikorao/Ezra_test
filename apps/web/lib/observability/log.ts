@@ -1,3 +1,4 @@
+import { getLogCorrelationFields } from "./correlation";
 import { flushPhoenix, isPhoenixEnabled, traceLlmCall, tracePipelineCall } from "./phoenix";
 
 export type LlmLogEvent = {
@@ -26,6 +27,8 @@ export function logEvent(event: LlmLogEvent | PipelineLogEvent): void {
     JSON.stringify({
       ts: new Date().toISOString(),
       ...event,
+      ...getLogCorrelationFields(),
+      otel: true as const,
       ...(isPhoenixEnabled() ? { phoenix: true as const } : {}),
     }),
   );

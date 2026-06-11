@@ -67,6 +67,18 @@ PHOENIX_PROJECT_NAME=artifact-hub
 
 Local: `pip install arize-phoenix && phoenix serve` → `PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006`
 
+### OpenTelemetry dashboards (layer 9b — Vercel correlation)
+
+| What | How |
+|------|-----|
+| **Vercel OTEL** | `@vercel/otel` in `instrumentation.ts` — platform traces + optional drains |
+| **Phoenix export** | Additional span processor via `getDefaultSpanProcessor` (same spans, dual export) |
+| **Web Analytics** | `@vercel/analytics` custom events with `trace_id` from `x-trace-id` headers |
+| **Structured logs** | JSON logs include `trace_id`, `span_id`, `vercel.deployment_id` |
+| **Correlation** | Filter Phoenix traces, Vercel Analytics events, and function logs by shared `trace_id` |
+
+Enable Web Analytics in the Vercel dashboard; see `docs/observability-dashboards.md`.
+
 ---
 
 ## Architecture overview

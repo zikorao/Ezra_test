@@ -184,7 +184,17 @@ PHOENIX_COLLECTOR_ENDPOINT=http://localhost:6006
 
 Prompts and comment bodies are **not** exported (privacy). Spans include provider, model, latency, and input size.
 
-Structured JSON logs remain in Vercel function logs when Phoenix is disabled.
+Structured JSON logs include `trace_id`, `span_id`, and `vercel.*` fields for log–trace correlation.
+
+## Observability dashboards (Step 12) — Phoenix + Vercel Analytics
+
+Artifact Hub registers **`@vercel/otel`** as the primary tracer (`instrumentation.ts`) and attaches a **Phoenix span processor** when `PHOENIX_API_KEY` is set. Traces flow to Vercel Observability (and optional OTEL drains) **and** Phoenix simultaneously.
+
+**Vercel Web Analytics** (`@vercel/analytics`) and **Speed Insights** are enabled in the root layout. Custom events (`search.suggest`, `search.submit`, `feedback.digest`) include a `trace_id` property read from the `x-trace-id` response header — use it to correlate browser events with Phoenix spans and Vercel function logs.
+
+1. Enable **Web Analytics** in the Vercel project dashboard
+2. (Optional) Configure an **OpenTelemetry trace drain** under Observability
+3. See [docs/observability-dashboards.md](docs/observability-dashboards.md) for the full correlation guide
 
 ## Ollama (local dev)
 
@@ -201,5 +211,5 @@ Structured JSON logs remain in Vercel function logs when Phoenix is disabled.
 | `supabase/migrations/` | Database schema |
 | `samples/` | Demo artifact files + manifest |
 | `scripts/` | Seed, index, deploy utilities |
-| `docs/` | MCP configuration |
+| `docs/` | MCP configuration, observability dashboards |
 | `WRITEUP.md` | Round 2 submission writeup |

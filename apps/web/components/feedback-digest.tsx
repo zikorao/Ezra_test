@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import {
+  readTraceIdFromResponse,
+  trackCorrelatedEvent,
+} from "@/lib/observability/analytics-client";
 import type { FeedbackDigest } from "@/lib/llm/types";
 
 type Props = {
@@ -27,10 +31,24 @@ export function FeedbackDigestPanel({ artifactId, commentCount }: Props) {
       };
 
       if (!res.ok) {
+        trackCorrelatedEvent(
+          "feedback.digest",
+          { ok: false, artifact_id: artifactId },
+          readTraceIdFromResponse(res),
+        );
         setError(data.error ?? "Could not generate summary");
         return;
       }
 
+      trackCorrelatedEvent(
+        "feedback.digest",
+        {
+          ok: true,
+          artifact_id: artifactId,
+          themes: data.digest?.themes?.length ?? 0,
+        },
+        readTraceIdFromResponse(res),
+      );
       if (data.digest) setDigest(data.digest);
     } catch {
       setError("Network error");

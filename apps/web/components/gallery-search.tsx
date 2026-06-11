@@ -2,6 +2,10 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  readTraceIdFromResponse,
+  trackCorrelatedEvent,
+} from "@/lib/observability/analytics-client";
 
 type Suggestion =
   | { kind: "query"; label: string; href: string }
@@ -36,6 +40,15 @@ export function GallerySearch({ initialQuery = "" }: { initialQuery?: string }) 
         suggestions?: Suggestion[];
         source?: "llm" | "autocomplete";
       };
+      trackCorrelatedEvent(
+        "search.suggest",
+        {
+          query_len: trimmed.length,
+          suggestions: data.suggestions?.length ?? 0,
+          source: data.source ?? "unknown",
+        },
+        readTraceIdFromResponse(res),
+      );
       setSuggestions(data.suggestions ?? []);
       setOpen((data.suggestions?.length ?? 0) > 0);
       setActiveIndex(-1);
@@ -76,6 +89,10 @@ export function GallerySearch({ initialQuery = "" }: { initialQuery?: string }) 
     if (trimmed) params.set("q", trimmed);
     else params.delete("q");
     setOpen(false);
+    trackCorrelatedEvent("search.submit", {
+      query_len: trimmed.length,
+      has_query: Boolean(trimmed),
+    });
     router.push(`/?${params.toString()}`);
   }
 

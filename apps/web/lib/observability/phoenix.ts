@@ -2,57 +2,26 @@ import {
   LLM_MODEL_NAME,
   LLM_PROVIDER,
   OpenInferenceSpanKind,
-  register,
   SemanticConventions,
   SpanStatusCode,
-  trace,
 } from "@arizeai/phoenix-otel";
-import type { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { trace } from "@opentelemetry/api";
 
-let provider: NodeTracerProvider | null = null;
-let enabled = false;
+import { enrichActiveSpan } from "./correlation";
+import { phoenixConfigured } from "./otel";
 
-function phoenixConfigured(): boolean {
-  return Boolean(
-    process.env.PHOENIX_API_KEY?.trim() ||
-      process.env.PHOENIX_COLLECTOR_ENDPOINT?.trim(),
-  );
-}
-
-/** Initialize Phoenix OTEL (call once per Node process). */
-export function initPhoenix(): void {
-  if (provider || !phoenixConfigured()) return;
-
-  try {
-    provider = register({
-      projectName: process.env.PHOENIX_PROJECT_NAME?.trim() || "artifact-hub",
-      url:
-        process.env.PHOENIX_COLLECTOR_ENDPOINT?.trim() ||
-        "https://app.phoenix.arize.com",
-      apiKey: process.env.PHOENIX_API_KEY?.trim(),
-      // Immediate export on serverless — avoids lost batches when the function freezes.
-      batch: process.env.PHOENIX_BATCH === "true",
-    });
-    enabled = true;
-  } catch (e) {
-    console.warn(
-      "[phoenix] init failed:",
-      e instanceof Error ? e.message : e,
-    );
-  }
-}
-
-function ensurePhoenix(): void {
-  if (!provider && phoenixConfigured()) initPhoenix();
-}
+type ForceFlushProvider = {
+  forceFlush?: () => Promise<void>;
+};
 
 export function isPhoenixEnabled(): boolean {
-  ensurePhoenix();
-  return enabled;
+  return phoenixConfigured();
 }
 
 export async function flushPhoenix(): Promise<void> {
-  if (!provider) return;
+  const provider = trace.getTracerProvider() as ForceFlushProvider;
+  if (typeof provider.forceFlush !== "function") return;
+
   try {
     await provider.forceFlush();
   } catch {
@@ -76,11 +45,9 @@ export async function traceLlmCall<T>(
   input: LlmTraceInput,
   fn: () => Promise<T>,
 ): Promise<T> {
-  ensurePhoenix();
-  if (!enabled) return fn();
-
   const tracer = trace.getTracer("artifact-hub");
   return tracer.startActiveSpan(input.operation, async (span) => {
+    enrichActiveSpan();
     span.setAttribute(
       SemanticConventions.OPENINFERENCE_SPAN_KIND,
       OpenInferenceSpanKind.LLM,
@@ -110,11 +77,9 @@ export async function tracePipelineCall<T>(
   input: PipelineTraceInput,
   fn: () => Promise<T>,
 ): Promise<T> {
-  ensurePhoenix();
-  if (!enabled) return fn();
-
   const tracer = trace.getTracer("artifact-hub");
   return tracer.startActiveSpan(input.operation, async (span) => {
+    enrichActiveSpan();
     span.setAttribute(
       SemanticConventions.OPENINFERENCE_SPAN_KIND,
       OpenInferenceSpanKind.CHAIN,
@@ -139,4 +104,9 @@ export async function tracePipelineCall<T>(
       await flushPhoenix();
     }
   });
+}
+
+/** @deprecated Use registerObservability() from instrumentation.ts */
+export function initPhoenix(): void {
+  // Kept for backwards compatibility with log.ts re-exports.
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { applyTraceHeaders } from "@/lib/observability/correlation";
 import { suggestSearch } from "@/lib/search/suggest";
 
 export const runtime = "nodejs";
@@ -13,9 +14,11 @@ export async function GET(request: Request) {
 
   try {
     const { suggestions, source } = await suggestSearch(q);
-    return NextResponse.json({ suggestions, source });
+    return applyTraceHeaders(NextResponse.json({ suggestions, source }));
   } catch (e) {
     const message = e instanceof Error ? e.message : "Suggest failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return applyTraceHeaders(
+      NextResponse.json({ error: message }, { status: 500 }),
+    );
   }
 }
