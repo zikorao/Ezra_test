@@ -4,6 +4,7 @@ import {
   catalogPrefixMatches,
   sanitizeLlmSuggestResult,
 } from "../search/suggest-sanitize";
+import { withLlmTiming } from "../observability/log";
 
 const DEFAULT_BASE = "http://localhost:11434";
 const DEFAULT_MODEL = "llama3.2";
@@ -20,28 +21,31 @@ async function ollamaChat(
   system: string,
   user: string,
   json = true,
+  operation = "llm.chat",
 ): Promise<string> {
-  const res = await fetch(`${baseUrl()}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: model(),
-      stream: false,
-      ...(json ? { format: "json" } : {}),
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
+  return withLlmTiming(operation, "ollama", model(), system.length + user.length, async () => {
+    const res = await fetch(`${baseUrl()}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: model(),
+        stream: false,
+        ...(json ? { format: "json" } : {}),
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Ollama error ${res.status}: ${text.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    return data.message?.content ?? "";
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Ollama error ${res.status}: ${text.slice(0, 200)}`);
-  }
-
-  const data = await res.json();
-  return data.message?.content ?? "";
 }
 
 export async function isOllamaAvailable(): Promise<boolean> {
@@ -68,7 +72,7 @@ MIME type: ${input.mimeType}
 Content excerpt:
 ${excerpt}`;
 
-  const raw = await ollamaChat(system, user, true);
+  const raw = await ollamaChat(system, user, true, "metadata.generate");
   return parseMetadataJson(raw);
 }
 
@@ -94,7 +98,7 @@ export async function planSearchQuery(query: string): Promise<SearchPlan> {
 Respond with JSON only: {"keywords":["..."],"semanticQuery":"...","tags":["..."]}`;
 
   try {
-    const raw = await ollamaChat(system, `Query: ${query}`, true);
+    const raw = await ollamaChat(system, `Query: ${query}`, true, "search.plan");
     const plan = parseSearchPlanJson(raw);
     if (plan) {
       return {
@@ -160,6 +164,7 @@ Only use catalog title/tag prefix matches. Never invent words not in the catalog
       system,
       `Partial query: ${prefix}${hints ? `\nHints: ${hints}` : ""}\n\nCatalog:\n${lines.join("\n")}`,
       true,
+      "search.suggest",
     );
     const parsed = parseSuggestJson(raw);
     if (!parsed) return null;
@@ -190,6 +195,7 @@ export async function summarizeFeedbackDigest(
       system,
       `Artifact: ${artifactTitle}\n\n${feedbackThreads}`,
       true,
+      "feedback.digest",
     );
     return parseFeedbackDigestJson(raw);
   } catch {

@@ -9,6 +9,7 @@ import {
   catalogPrefixMatches,
   sanitizeLlmSuggestResult,
 } from "../search/suggest-sanitize";
+import { withLlmTiming } from "../observability/log";
 
 const GROQ_API = "https://api.groq.com/openai/v1/chat/completions";
 const DEFAULT_MODEL = "llama-3.1-8b-instant";
@@ -26,36 +27,39 @@ async function groqChat(
   system: string,
   user: string,
   json = true,
+  operation = "llm.chat",
 ): Promise<string> {
   const key = apiKey();
   if (!key) throw new Error("GROQ_API_KEY is not configured.");
 
-  const res = await fetch(GROQ_API, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: model(),
-      temperature: 0.2,
-      ...(json ? { response_format: { type: "json_object" } } : {}),
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
+  return withLlmTiming(operation, "groq", model(), system.length + user.length, async () => {
+    const res = await fetch(GROQ_API, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: model(),
+        temperature: 0.2,
+        ...(json ? { response_format: { type: "json_object" } } : {}),
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Groq error ${res.status}: ${text.slice(0, 200)}`);
+    }
+
+    const data = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    return data.choices?.[0]?.message?.content ?? "";
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Groq error ${res.status}: ${text.slice(0, 200)}`);
-  }
-
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return data.choices?.[0]?.message?.content ?? "";
 }
 
 export async function isGroqAvailable(): Promise<boolean> {
@@ -88,7 +92,7 @@ MIME type: ${input.mimeType}
 Content excerpt:
 ${excerpt}`;
 
-  const raw = await groqChat(system, user, true);
+  const raw = await groqChat(system, user, true, "metadata.generate");
   return parseMetadataJson(raw);
 }
 
@@ -118,7 +122,7 @@ Respond with JSON only: {"keywords":["..."],"semanticQuery":"...","tags":["..."]
 For partial or typo queries, infer the intended topic. Keep keywords literal enough for text search.`;
 
   try {
-    const raw = await groqChat(system, `Query: ${query}`, true);
+    const raw = await groqChat(system, `Query: ${query}`, true, "search.plan");
     const plan = parseSearchPlanJson(raw);
     if (plan) {
       return {
@@ -198,7 +202,7 @@ Example: prefix "inv" with catalog tag "investor" → keywords:["investor"], tag
   ].join("");
 
   try {
-    const raw = await groqChat(system, user, true);
+    const raw = await groqChat(system, user, true, "search.suggest");
     const parsed = parseSuggestJson(raw);
     if (!parsed) return null;
 
@@ -235,7 +239,7 @@ Feedback threads:
 ${feedbackThreads}`;
 
   try {
-    const raw = await groqChat(system, user, true);
+    const raw = await groqChat(system, user, true, "feedback.digest");
     return parseFeedbackDigestJson(raw);
   } catch {
     return null;

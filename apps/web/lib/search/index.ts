@@ -1,5 +1,6 @@
 import { listArtifacts } from "../artifacts";
 import { embedText } from "../embeddings";
+import { logEvent } from "../observability/log";
 import type { Artifact } from "../types";
 import {
   autocompleteSearchBackup,
@@ -38,6 +39,7 @@ export async function searchArtifacts(query: string): Promise<Artifact[]> {
   const trimmed = query.trim();
   if (!trimmed) return listArtifacts();
 
+  const start = Date.now();
   const { plan, source: planSource } = await resolveSearchPlan(trimmed);
   const keywords = plan.keywords;
   const ftsQuery = buildFtsQuery(trimmed, keywords, plan.tags);
@@ -107,6 +109,18 @@ export async function searchArtifacts(query: string): Promise<Artifact[]> {
       }
     }
   }
+
+  logEvent({
+    type: "pipeline",
+    operation: "search",
+    ok: true,
+    ms: Date.now() - start,
+    meta: {
+      queryLen: trimmed.length,
+      resultCount: merged.length,
+      planSource,
+    },
+  });
 
   return merged;
 }

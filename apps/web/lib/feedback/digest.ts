@@ -2,6 +2,7 @@ import { listFeedback } from "./index";
 import { formatFeedbackThreads } from "./format";
 import { getArtifact } from "../artifacts";
 import { summarizeFeedbackDigest, isLlmAvailable } from "../llm";
+import { logEvent } from "../observability/log";
 import type { FeedbackDigest } from "../llm/types";
 
 export async function generateFeedbackDigest(
@@ -29,11 +30,28 @@ export async function generateFeedbackDigest(
   }
 
   const threads = formatFeedbackThreads(feedback);
+  const start = Date.now();
   const digest = await summarizeFeedbackDigest(artifact.title, threads);
 
   if (!digest) {
+    logEvent({
+      type: "pipeline",
+      operation: "feedback.digest",
+      ok: false,
+      ms: Date.now() - start,
+      meta: { commentCount: feedback.length },
+      error: "digest parse failed",
+    });
     return { ok: false, error: "Could not generate summary.", status: 502 };
   }
+
+  logEvent({
+    type: "pipeline",
+    operation: "feedback.digest",
+    ok: true,
+    ms: Date.now() - start,
+    meta: { commentCount: feedback.length, themeCount: digest.themes.length },
+  });
 
   return { ok: true, digest, commentCount: feedback.length };
 }

@@ -43,8 +43,28 @@ Artifact Hub is a lightweight platform for the full lifecycle of AI-generated de
 | **Version history** | Adds UI and storage complexity; tags + metadata sufficient for MVP |
 | **Real-time collaboration** | Polling/refresh is enough for async review workflows |
 | **Multi-tenant billing** | Out of scope for an internal team tool prototype |
+| **Phoenix (full observability stack)** | Deferred for MVP; lightweight structured logging covers LLM ops on Vercel |
 
 A polished core loop beats a sprawling partial system.
+
+### Observability (layer 9 — lite)
+
+The reference **$0 AI Architecture Stack** includes Phoenix for LLM tracing. Artifact Hub implements a **pragmatic subset**:
+
+| What | How |
+|------|-----|
+| **LLM call tracing** | Structured JSON logs per operation (`metadata.generate`, `search.plan`, `search.rerank`, `search.suggest`, `feedback.digest`) with provider, model, latency, and input size |
+| **Pipeline tracing** | End-to-end logs for `search`, `search.suggest`, and `feedback.digest` with result counts |
+| **Where to view** | Vercel function logs (production) or terminal stdout (local `npm run dev`) |
+| **Not logged** | Full prompts or comment bodies (privacy + log size) |
+
+Example log line:
+
+```json
+{"ts":"2026-06-10T12:00:00.000Z","type":"llm","operation":"search.plan","provider":"groq","model":"llama-3.1-8b-instant","ok":true,"ms":312,"inputChars":84}
+```
+
+Full Phoenix / OpenTelemetry integration is listed under “What I'd do with another week.”
 
 ---
 
@@ -74,6 +94,13 @@ A polished core loop beats a sprawling partial system.
 │  packages/mcp-server        │
 │  Claude Desktop / MCP clients│
 └─────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│  Observability (lite)        │
+│  Structured JSON → Vercel logs│
+│  LLM ops + pipeline timing   │
+└──────────────────────────────┘
 ```
 
 ### Search pipeline (production)
@@ -282,7 +309,8 @@ Configure MCP per `docs/claude-desktop-config.json`, then in Claude:
 
 ## What I'd do with another week
 
-1. **Search quality regression suite** — scripted queries with expected top hits
+1. **Phoenix / OpenTelemetry** — full LLM trace UI beyond structured logs
+2. **Search quality regression suite** — scripted queries with expected top hits
 2. **GitHub → Vercel CI** — lint + build gate on pull requests
 3. **Light E2E tests** — Playwright for publish → share → feedback → digest happy path
 4. **Digest on share view** — read-only digest for reviewers with artifact access

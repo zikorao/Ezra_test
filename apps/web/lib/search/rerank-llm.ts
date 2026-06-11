@@ -1,5 +1,6 @@
 import type { Artifact } from "../types";
 import { isLlmAvailable } from "../llm";
+import { withLlmTiming } from "../observability/log";
 import { orderArtifactsByIds } from "./rrf";
 
 const GROQ_API = "https://api.groq.com/openai/v1/chat/completions";
@@ -7,33 +8,35 @@ const GROQ_API = "https://api.groq.com/openai/v1/chat/completions";
 async function groqRerankChat(system: string, user: string): Promise<string> {
   const key = process.env.GROQ_API_KEY?.trim();
   if (!key) throw new Error("GROQ_API_KEY is not configured.");
-  const model = process.env.GROQ_MODEL?.trim() || "llama-3.1-8b-instant";
+  const modelName = process.env.GROQ_MODEL?.trim() || "llama-3.1-8b-instant";
 
-  const res = await fetch(GROQ_API, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.1,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
+  return withLlmTiming("search.rerank", "groq", modelName, system.length + user.length, async () => {
+    const res = await fetch(GROQ_API, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modelName,
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Groq rerank ${res.status}`);
+    }
+
+    const data = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    return data.choices?.[0]?.message?.content ?? "";
   });
-
-  if (!res.ok) {
-    throw new Error(`Groq rerank ${res.status}`);
-  }
-
-  const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return data.choices?.[0]?.message?.content ?? "";
 }
 
 /** Re-order hybrid search hits using Groq (works on Vercel without Jina). */

@@ -14,7 +14,7 @@
 6. **Code Agent** — Cursor
 7. **Data Layer** — Supabase Postgres + Storage
 8. **Deployment** — Vercel
-9. **Observability** — *(reference stack — Phoenix)*
+9. **Observability** — Structured LLM/pipeline logging (Phoenix deferred)
 
 See `AI_Zero_cost_arc.gif` for the full reference architecture diagram.
 
@@ -64,6 +64,7 @@ API_URL=https://ezra-test-web.vercel.app npm run seed:feedback
 | 8 | LLM-first search (Groq plan + rerank) | ✅ |
 | 9 | Autocomplete (LLM suggest + prefix fallback) | ✅ |
 | 10 | Feedback digest (Groq summary) | ✅ |
+| 11 | Observability lite (structured LLM logs) | ✅ |
 
 ## npm scripts
 
@@ -140,6 +141,19 @@ On artifact detail pages with comments, click **Summarize feedback**:
 - `GET /api/artifacts/[id]/feedback/digest`
 - Returns overview, themes, consensus, and action items via Groq
 - On-demand only (no LLM cost until clicked)
+
+## Observability (Step 11)
+
+Structured JSON logs for AI operations — viewable in **Vercel function logs** or local terminal:
+
+| Operation | Logged fields |
+|-----------|----------------|
+| `metadata.generate` | provider, model, latency, input size |
+| `search.plan` / `search.rerank` / `search.suggest` | same |
+| `feedback.digest` | latency, comment count |
+| `search` (pipeline) | query length, result count, plan source |
+
+Full prompts are **not** logged (privacy). Phoenix/OpenTelemetry is deferred — see `WRITEUP.md`.
 
 ## Ollama (local dev)
 
