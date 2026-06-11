@@ -1,5 +1,6 @@
-import type { ArtifactMetadata, MetadataInput } from "./types";
+import type { ArtifactMetadata, FeedbackDigest, MetadataInput } from "./types";
 import {
+  parseFeedbackDigestJson,
   parseMetadataJson,
   parseSearchPlanJson,
   parseSuggestJson,
@@ -210,6 +211,32 @@ Example: prefix "inv" with catalog tag "investor" → keywords:["investor"], tag
       keywords: parsed.keywords,
       tags: parsed.tags,
     });
+  } catch {
+    return null;
+  }
+}
+
+export async function summarizeFeedbackDigest(
+  artifactTitle: string,
+  feedbackThreads: string,
+): Promise<FeedbackDigest | null> {
+  const system = `You summarize async design review feedback for an AI-generated artifact owner.
+Respond with JSON only:
+{"summary":"2-3 sentences","themes":["theme"],"consensus":"what reviewers agree on","actionItems":["concrete next step"]}
+- summary: neutral overview of all threads
+- themes: 2-5 recurring topics (short phrases)
+- consensus: one sentence on shared sentiment or agreement (empty string if none)
+- actionItems: 1-5 prioritized, actionable fixes for the publisher
+Be concise and faithful to the comments — do not invent feedback.`;
+
+  const user = `Artifact: ${artifactTitle}
+
+Feedback threads:
+${feedbackThreads}`;
+
+  try {
+    const raw = await groqChat(system, user, true);
+    return parseFeedbackDigestJson(raw);
   } catch {
     return null;
   }

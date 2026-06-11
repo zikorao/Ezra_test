@@ -3,7 +3,7 @@ import * as groq from "./groq";
 import * as ollama from "./ollama";
 import type { ArtifactMetadata, MetadataInput } from "./types";
 
-export type { ArtifactMetadata, MetadataInput };
+export type { ArtifactMetadata, MetadataInput, FeedbackDigest } from "./types";
 
 function useGroq(): boolean {
   return (
@@ -88,4 +88,13 @@ export function mergeMetadata(
     "";
 
   return { title, description, tags };
+}
+
+export async function summarizeFeedbackDigest(
+  artifactTitle: string,
+  feedbackThreads: string,
+) {
+  return useGroq()
+    ? groq.summarizeFeedbackDigest(artifactTitle, feedbackThreads)
+    : ollama.summarizeFeedbackDigest(artifactTitle, feedbackThreads);
 }

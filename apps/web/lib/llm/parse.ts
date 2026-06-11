@@ -1,4 +1,4 @@
-import type { ArtifactMetadata } from "./types";
+import type { ArtifactMetadata, FeedbackDigest } from "./types";
 
 export function parseMetadataJson(raw: string): ArtifactMetadata | null {
   try {
@@ -120,6 +120,36 @@ export function parseSuggestJson(raw: string): ParsedSuggestResult | null {
 
     if (!artifactIndexes.length && !keywords.length && !tags.length) return null;
     return { artifactIndexes, keywords, tags };
+  } catch {
+    return null;
+  }
+}
+
+export function parseFeedbackDigestJson(raw: string): FeedbackDigest | null {
+  try {
+    const parsed = JSON.parse(raw) as {
+      summary?: string;
+      themes?: string[];
+      consensus?: string;
+      actionItems?: string[];
+      action_items?: string[];
+    };
+
+    const summary = String(parsed.summary ?? "").trim();
+    const themes = Array.isArray(parsed.themes)
+      ? parsed.themes.map((t) => String(t).trim()).filter(Boolean).slice(0, 6)
+      : [];
+    const consensus = String(parsed.consensus ?? "").trim();
+    const actionRaw = parsed.actionItems ?? parsed.action_items;
+    const actionItems = Array.isArray(actionRaw)
+      ? actionRaw.map((a) => String(a).trim()).filter(Boolean).slice(0, 8)
+      : [];
+
+    if (!summary && !themes.length && !consensus && !actionItems.length) {
+      return null;
+    }
+
+    return { summary, themes, consensus, actionItems };
   } catch {
     return null;
   }

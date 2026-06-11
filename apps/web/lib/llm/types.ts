@@ -9,3 +9,10 @@ export type MetadataInput = {
   mimeType: string;
   contentText: string;
 };
+
+export type FeedbackDigest = {
+  summary: string;
+  themes: string[];
+  consensus: string;
+  actionItems: string[];
+};

@@ -1,5 +1,5 @@
-import type { ArtifactMetadata, MetadataInput } from "./types";
-import { parseMetadataJson, parseSearchPlanJson, parseSuggestJson } from "./parse";
+import type { ArtifactMetadata, FeedbackDigest, MetadataInput } from "./types";
+import { parseFeedbackDigestJson, parseMetadataJson, parseSearchPlanJson, parseSuggestJson } from "./parse";
 import {
   catalogPrefixMatches,
   sanitizeLlmSuggestResult,
@@ -173,6 +173,25 @@ Only use catalog title/tag prefix matches. Never invent words not in the catalog
       keywords: parsed.keywords,
       tags: parsed.tags,
     });
+  } catch {
+    return null;
+  }
+}
+
+export async function summarizeFeedbackDigest(
+  artifactTitle: string,
+  feedbackThreads: string,
+): Promise<FeedbackDigest | null> {
+  const system = `Summarize design review feedback as JSON:
+{"summary":"","themes":[],"consensus":"","actionItems":[]}`;
+
+  try {
+    const raw = await ollamaChat(
+      system,
+      `Artifact: ${artifactTitle}\n\n${feedbackThreads}`,
+      true,
+    );
+    return parseFeedbackDigestJson(raw);
   } catch {
     return null;
   }

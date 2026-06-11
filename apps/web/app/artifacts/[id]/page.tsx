@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArtifactPreview } from "@/components/artifact-preview";
+import { FeedbackDigestPanel } from "@/components/feedback-digest";
 import { FeedbackPanel } from "@/components/feedback-panel";
 import { SharePanel } from "@/components/share-panel";
 import { getArtifact, getArtifactSignedUrl } from "@/lib/artifacts";
@@ -62,6 +63,11 @@ export default async function ArtifactPage({ params }: Props) {
         />
 
         <SharePanel artifactId={artifact.id} initialLinks={activeLinks} />
+
+        <FeedbackDigestPanel
+          artifactId={artifact.id}
+          commentCount={feedback.length}
+        />
 
         <FeedbackPanel artifactId={artifact.id} initialFeedback={feedback} />
 
