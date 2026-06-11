@@ -4,6 +4,10 @@ import {
   parseSearchPlanJson,
   parseSuggestJson,
 } from "./parse";
+import {
+  catalogPrefixMatches,
+  sanitizeLlmSuggestResult,
+} from "../search/suggest-sanitize";
 
 const GROQ_API = "https://api.groq.com/openai/v1/chat/completions";
 const DEFAULT_MODEL = "llama-3.1-8b-instant";
@@ -159,19 +163,41 @@ export async function suggestFromPartialQuery(
       `${item.index}. ${item.title} | tags: ${item.tags.slice(0, 6).join(", ") || "none"}`,
   );
 
-  const system = `You power autocomplete for an AI artifact catalog while the user is still typing.
-Respond with JSON only: {"artifacts":[1,3],"keywords":["checkout"],"tags":["checkout"]}
-- artifacts: candidate numbers (1-based) that match the partial query with high confidence
-- keywords: expanded search terms the user likely wants (1-4)
-- tags: matching catalog tags (lowercase)
-Only suggest strong prefix or semantic matches for the partial input. Prefer title/tag prefix matches.`;
+  const { tags: prefixTags, words: prefixWords } = catalogPrefixMatches(
+    prefix,
+    catalog,
+  );
+  const hintLines: string[] = [];
+  if (prefixTags.length) {
+    hintLines.push(`Tags starting with "${prefix}": ${prefixTags.join(", ")}`);
+  }
+  if (prefixWords.length) {
+    hintLines.push(
+      `Title words starting with "${prefix}": ${prefixWords.join(", ")}`,
+    );
+  }
+
+  const system = `You power autocomplete while the user is still typing a partial query in an AI artifact catalog.
+Respond with JSON only: {"artifacts":[1,3],"keywords":["investor"],"tags":["investor"]}
+
+Rules (strict):
+- The user input is an INCOMPLETE prefix, not a full word. Match against catalog titles and tags only.
+- Prefer title words or tags that START WITH the partial query (prefix match).
+- keywords and tags MUST come from the catalog hint list or matched artifact titles/tags — never invent unrelated words.
+- Do NOT expand to common English words that are not in the catalog (e.g. prefix "inv" → "investor" from catalog, NOT "inventory").
+- artifacts: 1-based indexes from the catalog list with high-confidence prefix matches only.
+- If nothing matches, return empty arrays — do not guess.
+
+Example: prefix "inv" with catalog tag "investor" → keywords:["investor"], tags:["investor"], artifacts pointing at pitch/investor decks.`;
+
+  const user = [
+    `Partial query: ${prefix}`,
+    hintLines.length ? `\nCatalog prefix hints:\n${hintLines.join("\n")}` : "",
+    `\nCatalog:\n${lines.join("\n")}`,
+  ].join("");
 
   try {
-    const raw = await groqChat(
-      system,
-      `Partial query: ${prefix}\n\nCatalog:\n${lines.join("\n")}`,
-      true,
-    );
+    const raw = await groqChat(system, user, true);
     const parsed = parseSuggestJson(raw);
     if (!parsed) return null;
 
@@ -179,11 +205,11 @@ Only suggest strong prefix or semantic matches for the partial input. Prefer tit
       .map((n) => catalog[n - 1]?.id)
       .filter((id): id is string => Boolean(id));
 
-    return {
+    return sanitizeLlmSuggestResult(prefix, catalog, {
       artifactIds: [...new Set(artifactIds)],
       keywords: parsed.keywords,
       tags: parsed.tags,
-    };
+    });
   } catch {
     return null;
   }

@@ -1,5 +1,9 @@
 import type { ArtifactMetadata, MetadataInput } from "./types";
 import { parseMetadataJson, parseSearchPlanJson, parseSuggestJson } from "./parse";
+import {
+  catalogPrefixMatches,
+  sanitizeLlmSuggestResult,
+} from "../search/suggest-sanitize";
 
 const DEFAULT_BASE = "http://localhost:11434";
 const DEFAULT_MODEL = "llama3.2";
@@ -136,12 +140,25 @@ export async function suggestFromPartialQuery(
       `${item.index}. ${item.title} | tags: ${item.tags.slice(0, 6).join(", ") || "none"}`,
   );
 
-  const system = `Autocomplete for artifact catalog. JSON: {"artifacts":[1],"keywords":[],"tags":[]}`;
+  const { tags: prefixTags, words: prefixWords } = catalogPrefixMatches(
+    prefix,
+    catalog,
+  );
+  const hints = [
+    prefixTags.length ? `Tags: ${prefixTags.join(", ")}` : "",
+    prefixWords.length ? `Words: ${prefixWords.join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+  const system = `Autocomplete for artifact catalog while user types a partial prefix.
+JSON: {"artifacts":[1],"keywords":[],"tags":[]}
+Only use catalog title/tag prefix matches. Never invent words not in the catalog.`;
 
   try {
     const raw = await ollamaChat(
       system,
-      `Partial query: ${prefix}\n\nCatalog:\n${lines.join("\n")}`,
+      `Partial query: ${prefix}${hints ? `\nHints: ${hints}` : ""}\n\nCatalog:\n${lines.join("\n")}`,
       true,
     );
     const parsed = parseSuggestJson(raw);
@@ -151,11 +168,11 @@ export async function suggestFromPartialQuery(
       .map((n) => catalog[n - 1]?.id)
       .filter((id): id is string => Boolean(id));
 
-    return {
+    return sanitizeLlmSuggestResult(prefix, catalog, {
       artifactIds: [...new Set(artifactIds)],
       keywords: parsed.keywords,
       tags: parsed.tags,
-    };
+    });
   } catch {
     return null;
   }

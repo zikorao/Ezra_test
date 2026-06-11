@@ -50,7 +50,9 @@ Open [http://localhost:3000](http://localhost:3000).
 | 4 | LLM auto-metadata + search | ✅ |
 | 5 | MCP server (Claude Desktop) | ✅ |
 | 6 | Deploy (Vercel) | ✅ |
-| 7 | Hybrid search (FTS + pgvector) | ✅ |
+| 7 | Hybrid search (FTS + pgvector + RRF) | ✅ |
+| 8 | LLM-first search (Groq plan + rerank) | ✅ |
+| 9 | Autocomplete (LLM suggest + prefix fallback) | ✅ |
 
 ### Vercel deployment
 
@@ -90,6 +92,28 @@ MCP config: see `docs/claude-desktop-config.json`.
 Search combines **full-text (tsvector)**, **semantic (pgvector HNSW)**, and **LLM keyword expansion** via reciprocal rank fusion.
 
 **Production (Vercel):** set `EMBEDDING_PROVIDER=jina` and a free [Jina API key](https://jina.ai) for vector search, or rely on FTS + keywords without embeddings.
+
+### LLM-first search + autocomplete (Steps 8–9)
+
+**Main search** (`/?q=...`):
+
+1. **Groq query plan** — expands the query into keywords, a semantic rewrite (for Jina/pgvector), and likely catalog tags
+2. **Hybrid retrieval** — Supabase FTS + vector RPC + tag hints, merged with reciprocal rank fusion (RRF)
+3. **Groq rerank** — re-orders top candidates by intent
+4. **Prefix backup** — if results are weak or empty, falls back to title/tag prefix matching
+
+**Autocomplete** (`GET /api/search/suggest?q=...`, gallery search bar):
+
+1. **Groq suggest** — picks catalog artifacts/tags from partial input (e.g. `inv` → `investor`, pitch deck); catalog prefix hints prevent unrelated expansions
+2. **Prefix fallback** — title/tag prefix scoring when LLM is slow or unavailable (~900ms timeout)
+3. Response includes `source: "llm" | "autocomplete"` for debugging
+
+Requires `LLM_PROVIDER=groq` + `GROQ_API_KEY` on Vercel. Local dev uses Ollama for the same flow.
+
+```bash
+# Re-index after seeding or schema changes
+npm run index
+```
 
 ### Ollama (Step 1)
 

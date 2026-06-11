@@ -94,7 +94,7 @@ function buildLlmSuggestions(
   const suggestions: SearchSuggestion[] = [];
   const byId = new Map(all.map((a) => [a.id, a]));
 
-  const searchTerm = llm.keywords[0] ?? q;
+  const searchTerm = llm.keywords[0] ?? llm.tags[0] ?? q;
   suggestions.push({
     kind: "query",
     label: `Search “${searchTerm}”`,
